@@ -1,0 +1,125 @@
+Analyzing e:/imm_vae/IMM_CelebA.ipynb...
+--- Cell 1 ---
+1: times = torch.linspace(1.0, imm_model.schedule.tmin, steps=32, device=device)
+--- Cell 2 ---
+2: def get_inception_features(x: torch.Tensor, device: torch.device, batch_size: int = 64):
+2: _inception.Mixed_7c.register_forward_hook(lambda m, i, o: setattr(_inception, "_pool3", o))
+2: ckpt.pop("fc.weight", None)
+2: for i in range(0, x.shape[0], batch_size):
+2: batch = x[i : i+batch_size].to(device)
+2: batch_size: int = 64
+2: real_feats = get_inception_features(real_images, device, batch_size)  # [N,2048]
+2: fake_feats = get_inception_features(fake_images, device, batch_size)
+2: times = torch.linspace(1.0, imm_model.schedule.tmin, steps=32, device=device)
+2: batch_size = batch_size,
+2: fid_score = compute_fid_from_tensors(reals, fakes, device, batch_size=64)
+--- Cell 3 ---
+3: times = torch.linspace(1.0, imm_model.schedule.tmin, steps=32)  # e.g. [1.0,0.857,…,0.0]
+--- Cell 6 ---
+6: # (Colab already comes with torch, torchvision, etc.)
+6: down = 2**3  # three halving steps
+6: def compute_mmd(x, y):
+6: def _weight_fn(self, s: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+6: # 12) weights
+6: weights = self._weight_fn(ss.unsqueeze(-1), ts.unsqueeze(-1))  # [G*M*M,]
+6: return torch.mean(joint * weights)
+6: n_epochs=10,
+6: n_epochs=10,
+6: # 10.3) Two optimizers: VAE params and IMM params
+6: optimizer_vae = torch.optim.Adam(model.parameters(), lr=1e-3)
+6: optimizer_vae = torch.optim.Adam(model.parameters(), lr=1e-3)
+6: optimizer_imm = torch.optim.Adam(imm_model.parameters(), lr=1e-5)
+6: optimizer_imm = torch.optim.Adam(imm_model.parameters(), lr=1e-5)
+6: for epoch in range(n_epochs):
+6: for epoch in range(n_epochs):
+6: # ─── Zero gradients for both optimizers ───
+6: # optimizer_vae.zero_grad()
+6: # optimizer_imm.zero_grad()
+6: mmd = compute_mmd(true_samples, z)
+6: steps=32,
+6: prior_mmd = compute_mmd(z_imm, z)
+6: # (4) Total loss = reconstruction + 0.1*mmd + imm_loss
+6: #loss = nll + .1*prior_mmd + 1e-2*imm_loss
+6: loss_vae = nll +  1e-4 * prior_mmd #1* prior_mmd +
+6: optimizer_vae.zero_grad()
+6: optimizer_imm.zero_grad()
+6: # Now that both backward() calls have run, update both optimizers:
+6: optimizer_vae.step()
+6: optimizer_imm.step()
+6: # optimizer.step()
+6: # optimizer_imm.step()
+6: f"[Epoch {epoch+1}/{n_epochs}  Step {step_idx}]  "
+6: f"[Epoch {epoch+1}/{n_epochs}  Step {step_idx}]  "
+6: f"Reconstruction={nll.item():.5f}  MMD={prior_mmd.item():.5f} IMM={imm_loss.item():.5f}" #IMM={imm_loss.item():.5f}
+6: # ─── Every plot_every steps: sample new digits via IMM → decode → show ───
+6: steps=32,
+6: # 11.1) Build a DataLoader whose batch_size is divisible by 16, and drop the last incomplete batch
+6: batch_size = 128  # 192 % 16 == 0
+6: batch_size = batch_size,
+6: # 11.2) Train for z_dim=2 and 10 epochs
+6: n_epochs = 80,
+6: n_epochs = 80,
+--- Cell 7 ---
+7: batch_size=128, shuffle=False, drop_last=False, num_workers=0, pin_memory=True
+==============================
+Analyzing e:/imm_vae/IMM_mmd_celebA_FID.ipynb...
+--- Cell 0 ---
+0: # (Colab already comes with torch, torchvision, etc.)
+0: down = 2**3  # three halving steps
+0: def compute_mmd(x, y):
+0: def _weight_fn(self, s: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+0: # 12) weights
+0: weights = self._weight_fn(ss.unsqueeze(-1), ts.unsqueeze(-1))  # [G*M*M,]
+0: return torch.mean(joint * weights)
+0: n_epochs=10,
+0: n_epochs=10,
+0: # 10.3) Two optimizers: VAE params and IMM params
+0: optimizer_vae = torch.optim.Adam(model.parameters(), lr=1e-3)
+0: optimizer_vae = torch.optim.Adam(model.parameters(), lr=1e-3)
+0: optimizer_imm = torch.optim.Adam(imm_model.parameters(), lr=1e-5)
+0: optimizer_imm = torch.optim.Adam(imm_model.parameters(), lr=1e-5)
+0: for epoch in range(n_epochs):
+0: for epoch in range(n_epochs):
+0: # ─── Zero gradients for both optimizers ───
+0: # optimizer_vae.zero_grad()
+0: # optimizer_imm.zero_grad()
+0: mmd = compute_mmd(true_samples, z)
+0: steps=32,
+0: prior_mmd = compute_mmd(z_imm, z)
+0: # (4) Total loss = reconstruction + 0.1*mmd + imm_loss
+0: #loss = nll + .1*prior_mmd + 1e-2*imm_loss
+0: loss_vae = nll +  1e-5 * mmd #1* prior_mmd +
+0: optimizer_vae.zero_grad()
+0: optimizer_imm.zero_grad()
+0: # Now that both backward() calls have run, update both optimizers:
+0: optimizer_vae.step()
+0: optimizer_imm.step()
+0: # optimizer.step()
+0: # optimizer_imm.step()
+0: f"[Epoch {epoch+1}/{n_epochs}  Step {step_idx}]  "
+0: f"[Epoch {epoch+1}/{n_epochs}  Step {step_idx}]  "
+0: f"Reconstruction={nll.item():.5f}  MMD={prior_mmd.item():.5f} IMM={imm_loss.item():.5f}" #IMM={imm_loss.item():.5f}
+0: # ─── Every plot_every steps: sample new digits via IMM → decode → show ───
+0: steps=32,
+0: # 11.1) Build a DataLoader whose batch_size is divisible by 16, and drop the last incomplete batch
+0: batch_size = 128  # 192 % 16 == 0
+0: batch_size = batch_size,
+0: # 11.2) Train for z_dim=2 and 10 epochs
+0: n_epochs = 80,
+0: n_epochs = 80,
+--- Cell 1 ---
+1: def get_inception_features(x: torch.Tensor, device: torch.device, batch_size: int = 64):
+1: _inception.Mixed_7c.register_forward_hook(lambda m, i, o: setattr(_inception, "_pool3", o))
+1: ckpt.pop("fc.weight", None)
+1: for i in range(0, x.shape[0], batch_size):
+1: batch = x[i : i+batch_size].to(device)
+1: batch_size: int = 64
+1: real_feats = get_inception_features(real_images, device, batch_size)  # [N,2048]
+1: fake_feats = get_inception_features(fake_images, device, batch_size)
+1: times = torch.linspace(1.0, imm_model.schedule.tmin, steps=32, device=device)
+1: batch_size = batch_size,
+1: fid_score = compute_fid_from_tensors(reals, fakes, device, batch_size=64)
+--- Cell 2 ---
+2: times = torch.linspace(1.0, imm_model.schedule.tmin, steps=32)  # e.g. [1.0,0.857,…,0.0]
+--- Cell 3 ---
+3: batch_size=128, shuffle=False, drop_last=False, num_workers=0, pin_memory=True

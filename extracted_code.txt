@@ -1,0 +1,1084 @@
+Cell 0:
+# ────────────────────────────────────────────────────────────────
+# 1) Install / import dependencies
+# (Colab already comes with torch, torchvision, etc.)
+# ────────────────────────────────────────────────────────────────
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.autograd import Variable
+from torch.utils.data import DataLoader
+from torchvision import transforms
+from torchvision.datasets import CelebA
+import torchvision
+import numpy as np
+import matplotlib.pyplot as plt
+import math
+import os
+import random
+#%pip install gdown
+
+from tqdm import tqdm
+def set_seed(seed: int):
+    # 1) Python built-ins
+    random.seed(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
+
+    # 2) NumPy
+    np.random.seed(seed)
+
+    # 3) Torch (CPU & GPU)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    # 4) Torch determinism flags
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark     = False
+
+    # 5) (Optional, PyTorch ≥1.8) enforce everywhere
+    torch.use_deterministic_algorithms(True)
+
+# ────────────────────────────────────────────────────────────────
+# 2) “Flatten” and “Reshape” helpers (for Conv ↔ FC transitions)
+# ────────────────────────────────────────────────────────────────
+class Flatten(nn.Module):
+    def forward(self, x):
+        return x.view(x.size(0), -1)
+
+class Reshape(nn.Module):
+    def __init__(self, outer_shape):
+        super().__init__()
+        self.outer_shape = outer_shape
+    def forward(self, x):
+        return x.view(x.size(0), *self.outer_shape)
+
+# ────────────────────────────────────────────────────────────────
+# 3) Encoder / Decoder (DC-GAN style) exactly as in the original
+# ────────────────────────────────────────────────────────────────
+class Encoder(nn.Module):
+    def __init__(
+        self,
+        img_channels:    int,  # e.g. 3
+        filters:         int,  # base filter count, e.g. 64
+        num_conv:        int,  # conv kernel size, e.g. 3
+        intermediate_dim:int,  # size of FC before latent heads, e.g. 512
+        latent_dim:      int,  # size of z, e.g. 128
+        img_rows:        int,  # CIFAR height, 32
+        img_cols:        int,  # CIFAR width,  32
+    ):
+        super().__init__()
+        pad = num_conv // 2
+
+        # 32→16→8→4 with stride=2
+        self.conv1 = nn.Conv2d(img_channels, filters,     num_conv, stride=2, padding=pad)
+        self.bn1   = nn.BatchNorm2d(filters)
+        self.conv2 = nn.Conv2d(filters,      filters*2,  num_conv, stride=2, padding=pad)
+        self.bn2   = nn.BatchNorm2d(filters*2)
+        self.conv3 = nn.Conv2d(filters*2,    filters*4,  num_conv, stride=2, padding=pad)
+        self.bn3   = nn.BatchNorm2d(filters*4)
+        self.act   = nn.ReLU(inplace=True)
+
+        # compute flatten size: (filters*4) × 4 × 4
+        down = 2**3  # three halving steps
+        h, w = img_rows // down, img_cols // down
+        flat_dim = filters*4 * h * w
+
+        # FC → intermediate, then two heads
+        self.flatten   = nn.Flatten()
+        self.fc_shared = nn.Linear(flat_dim, intermediate_dim)
+        self.fc_mu     = nn.Linear(intermediate_dim, latent_dim)
+        self.fc_logvar = nn.Linear(intermediate_dim, latent_dim)
+
+    def forward(self, x):
+        x = self.act(self.bn1(self.conv1(x)))  # [B, F, 16,16]
+        x = self.act(self.bn2(self.conv2(x)))  # [B,2F, 8, 8]
+        x = self.act(self.bn3(self.conv3(x)))  # [B,4F, 4, 4]
+        x = self.flatten(x)                    # [B, 4F*4*4]
+        h = self.act(self.fc_shared(x))        # [B, intermediate_dim]
+        return self.fc_mu(h), self.fc_logvar(h)
+
+
+class Decoder(nn.Module):
+    def __init__(
+        self,
+        img_channels:    int,
+        filters:         int,
+        num_conv:        int,  # not used for deconv here
+        intermediate_dim:int,
+        latent_dim:      int,
+        img_rows:        int,
+        img_cols:        int,
+    ):
+        super().__init__()
+        down = 2**3
+        h, w = img_rows // down, img_cols // down
+        # project z → (filters*4) × 4 × 4
+        self.fc1 = nn.Linear(latent_dim, intermediate_dim)
+        self.fc2 = nn.Linear(intermediate_dim, filters*4 * h * w)
+        self.act = nn.ReLU(inplace=True)
+        self.reshape = lambda z: z.view(-1, filters*4, h, w)
+
+        # upsample 4→8→16→32 with 4×4 kernels, stride=2, padding=1
+        self.deconv1 = nn.ConvTranspose2d(filters*4, filters*2, 4, 2, 1)
+        self.bn1      = nn.BatchNorm2d(filters*2)
+        self.deconv2 = nn.ConvTranspose2d(filters*2, filters,   4, 2, 1)
+        self.bn2      = nn.BatchNorm2d(filters)
+        self.deconv3 = nn.ConvTranspose2d(filters,    img_channels, 4, 2, 1)
+        self.out_act = nn.Sigmoid()  # outputs in [0,1]
+        self.out_act = nn.Tanh()  # outputs in [-1,1] (as per CelebA normalization)
+
+    def forward(self, z):
+        h = self.act(self.fc1(z))            # [B, intermediate_dim]
+        h = self.act(self.fc2(h))            # [B, 4F*h*w]
+        h = self.reshape(h)                  # [B,4F,4,4]
+        h = self.act(self.bn1(self.deconv1(h)))  # [B,2F,8,8]
+        h = self.act(self.bn2(self.deconv2(h)))  # [B, F,16,16]
+        h = self.out_act(self.deconv3(h))       # [B,3,32,32]
+        return h
+
+# ────────────────────────────────────────────────────────────────
+# 4) MMD computation (RBF kernel)
+# ────────────────────────────────────────────────────────────────
+def compute_kernel(x, y):
+    x_size, y_size, dim = x.size(0), y.size(0), x.size(1)
+    x_exp = x.unsqueeze(1).expand(x_size, y_size, dim)
+    y_exp = y.unsqueeze(0).expand(x_size, y_size, dim)
+    kernel_input = ((x_exp - y_exp)**2).mean(2) / float(dim)
+    return torch.exp(-kernel_input)  # [x_size, y_size]
+
+def compute_mmd(x, y):
+    x_kernel = compute_kernel(x, x).mean()
+    y_kernel = compute_kernel(y, y).mean()
+    xy_kernel = compute_kernel(x, y).mean()
+    return x_kernel + y_kernel - 2*xy_kernel
+# ────────────────────────────────────────────────────────────────
+def compute_kl(mu: torch.Tensor, logvar: torch.Tensor, reduction: str = "mean") -> torch.Tensor:
+    # per‐sample KL: shape [B]
+    kl = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()).sum(dim=1)
+    if reduction == "sum":
+        return kl.sum()
+    if reduction == "mean":
+        return kl.mean()
+    return kl
+
+# ────────────────────────────────────────────────────────────────
+# 5) The “pure” VAE (no KL, only MMD) wrapper
+# ────────────────────────────────────────────────────────────────
+class Model(nn.Module):
+    def __init__(self,
+                 img_channels:     3,
+                 filters:          32,
+                 num_conv:         3,
+                 intermediate_dim: 128,
+                 z_dim:       2,
+                 img_rows:         32,
+                 img_cols:         32):
+        super().__init__()
+        # ← the order here must match your Encoder’s __init__
+        self.encoder = Encoder(
+            img_channels=img_channels,
+            filters=filters,
+            num_conv=num_conv,
+            intermediate_dim=intermediate_dim,
+            latent_dim=z_dim,
+            img_rows=img_rows,
+            img_cols=img_cols,
+        )
+        self.decoder = Decoder(
+            img_channels=img_channels,
+            filters=filters,
+            num_conv=num_conv,
+            intermediate_dim=intermediate_dim,
+            latent_dim=z_dim,
+            img_rows=img_rows,
+            img_cols=img_cols,
+        )
+
+    def reparameterize(self, mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
+        # Optionally clamp logvar for stability
+        logvar = torch.clamp(logvar, min=-10.0, max=10.0)
+        std = (0.5 * logvar).exp()
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def forward(self, x: torch.Tensor):
+        mu, logvar = self.encoder(x)
+        z = self.reparameterize(mu, logvar)
+        x_recon = self.decoder(z)
+        return z, x_recon, mu, logvar
+# ────────────────────────────────────────────────────────────────
+# 6) IMM schedule and parameterizations (OTFM Euler-FM version)
+# ────────────────────────────────────────────────────────────────
+class IMMSchedule(nn.Module):
+    def alpha(self, t: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError
+    def sigma(self, t: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError
+    def lamb(self, t: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError
+    def lamb_diff(self, t: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError
+    def eta(self, t: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError
+    def eta_inv(self, u: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError
+
+class CosineSchedule(IMMSchedule):
+    @property
+    def tmax(self):
+        return 0.996
+
+    @property
+    def tmin(self):
+        return 0.001
+
+    def alpha(self, t: torch.Tensor) -> torch.Tensor:
+        return torch.cos(0.5 * math.pi * t)
+
+    def sigma(self, t: torch.Tensor) -> torch.Tensor:
+        return torch.sin(0.5 * math.pi * t)
+
+    def lamb(self, t: torch.Tensor) -> torch.Tensor:
+        return 2.0 * torch.log(1.0 / torch.tan(0.5 * math.pi * t))
+
+    def lamb_diff(self, t: torch.Tensor) -> torch.Tensor:
+        return -2.0 / torch.sin(math.pi * t)
+
+    def eta(self, t: torch.Tensor) -> torch.Tensor:
+        return torch.tan(0.5 * math.pi * t)
+
+    def eta_inv(self, u: torch.Tensor) -> torch.Tensor:
+        return 2.0 * torch.atan(u) / math.pi
+
+class OTFMSchedule(IMMSchedule):
+    @property
+    def tmax(self):
+        return 0.994
+    @property
+    def tmin(self):
+        return 0.001
+
+    def alpha(self, t: torch.Tensor) -> torch.Tensor:
+        return 1.0 - t
+    def sigma(self, t: torch.Tensor) -> torch.Tensor:
+        return t
+    def lamb(self, t: torch.Tensor) -> torch.Tensor:
+        return 2.0 * torch.log((1.0 - t) / t)
+    def lamb_diff(self, t: torch.Tensor) -> torch.Tensor:
+        return 2.0 / (t*t - t)
+    def eta(self, t: torch.Tensor) -> torch.Tensor:
+        return t / (1.0 - t)
+    def eta_inv(self, u: torch.Tensor) -> torch.Tensor:
+        return u / (u + 1.0)
+
+class IMMParameterization(nn.Module):
+    def __init__(self, sigma_data: float, schedule: IMMSchedule):
+        super().__init__()
+        self.sigma_data = sigma_data
+        self.schedule = schedule
+
+    def c_noise(self, t: torch.Tensor) -> torch.Tensor:
+        return 1000.0 * t
+
+    def c_in(self, t: torch.Tensor) -> torch.Tensor:
+        a = self.schedule.alpha(t)
+        s = self.schedule.sigma(t)
+        return 1.0 / (self.sigma_data * torch.sqrt(a*a + s*s))
+
+    def c_skip(self, s: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError
+    def c_out(self, s: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError
+
+class OtFmEulerFmParameterization(IMMParameterization):
+    def __init__(self, sigma_data: float):
+        super().__init__(sigma_data, OTFMSchedule())
+
+    def c_skip(self, s: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        # always 1
+        return torch.ones_like(s)
+
+    def c_out(self, s: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        # -(t - s) * sigma_data
+        return -(t - s) * self.sigma_data
+
+class OtFmIdentityParameterization(IMMParameterization):
+    def __init__(self, sigma_data: float):
+        super().__init__(sigma_data, OTFMSchedule())
+
+    def c_skip(self, s: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        # sigma_s / sigma_t
+        σ_s = self.schedule.sigma(s)
+        σ_t = self.schedule.sigma(t)
+        return σ_s / σ_t
+
+    def c_out(self, s: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        # alpha_s − alpha_t * (σ_s/σ_t)
+        α_s = self.schedule.alpha(s)
+        α_t = self.schedule.alpha(t)
+        σ_s = self.schedule.sigma(s)
+        σ_t = self.schedule.sigma(t)
+        return α_s - α_t * (σ_s / σ_t)
+
+class CosineIdentityParameterization(IMMParameterization):
+    def __init__(self, sigma_data: float):
+        super().__init__(sigma_data, CosineSchedule())
+
+    def c_skip(self, s: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        sigma_s = self.schedule.sigma(s)
+        sigma_t = self.schedule.sigma(t)
+        return sigma_s / sigma_t
+
+    def c_out(self, s: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        alpha_s = self.schedule.alpha(s)
+        alpha_t = self.schedule.alpha(t)
+        sigma_s = self.schedule.sigma(s)
+        sigma_t = self.schedule.sigma(t)
+        return alpha_s - alpha_t * sigma_s / sigma_t
+
+class CosineSimpleEDMParameterization(IMMParameterization):
+    def __init__(self, sigma_data: float):
+        # uses the CosineSchedule defined above
+        super().__init__(sigma_data, CosineSchedule())
+
+    def c_skip(self, s: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        # cos(½π (t−s))
+        return torch.cos(0.5 * math.pi * (t - s))
+
+    def c_out(self, s: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        # − sin(½π (t−s)) · σ_data
+        return -torch.sin(0.5 * math.pi * (t - s)) * self.sigma_data
+
+class OtFmSimpleEDMParameterization(IMMParameterization):
+    def __init__(self, sigma_data: float):
+        # uses the Linear OTFM schedule defined above
+        super().__init__(sigma_data, OTFMSchedule())
+
+    def c_skip(self, s: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        a_s = self.schedule.alpha(s)
+        a_t = self.schedule.alpha(t)
+        σ_s = self.schedule.sigma(s)
+        σ_t = self.schedule.sigma(t)
+        # (a_s a_t + σ_s σ_t) / (a_t² + σ_t²)
+        return (a_s * a_t + σ_s * σ_t) / (a_t**2 + σ_t**2)
+
+    def c_out(self, s: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        a_s = self.schedule.alpha(s)
+        a_t = self.schedule.alpha(t)
+        σ_s = self.schedule.sigma(s)
+        σ_t = self.schedule.sigma(t)
+        # −(a_s σ_t − σ_s a_t) / √(a_t² + σ_t²)  · σ_data
+        return -(a_s*σ_t - σ_s*a_t) / torch.sqrt(a_t**2 + σ_t**2) * self.sigma_data
+
+# ────────────────────────────────────────────────────────────────
+# 7) Small MLP builder to feed (x_t * c_in(t), c_noise(s), c_noise(t)) → D
+# ────────────────────────────────────────────────────────────────
+def get_mlp(hidden_dim: int, n_hidden: int, input_dim: int, output_dim: int) -> nn.Module:
+    layers = []
+    in_dim = input_dim
+    for _ in range(n_hidden):
+        layers.append(nn.Linear(in_dim, hidden_dim))
+        layers.append(nn.Mish())
+        in_dim = hidden_dim
+    layers.append(nn.Linear(hidden_dim, output_dim))
+    return nn.Sequential(*layers)
+
+class ResBlock(nn.Module):
+    """A single residual block: LayerNorm → Linear → SiLU → Linear → skip."""
+    def __init__(self, dim):
+        super().__init__()
+        self.norm = nn.LayerNorm(dim)
+        self.fc1  = nn.Linear(dim, dim * 2)
+        self.fc2  = nn.Linear(dim * 2, dim)
+        self.act  = nn.SiLU()
+
+    def forward(self, x):
+        h = self.norm(x)
+        h = self.act(self.fc1(h))
+        h = self.fc2(h)
+        return x + h
+
+class ResidualDenoiser(nn.Module):
+    """
+    Residual MLP denoiser for IMM.
+
+    Input:  [B, D+2]  →  project up
+    Middle: N × ResBlock(dim)
+    Output: project back to [B, D]
+    """
+    def __init__(self,
+                 input_dim:  int,
+                 model_dim:  int = 1024,
+                 n_blocks:   int = 8,
+                 output_dim: int = None):
+        super().__init__()
+        output_dim = output_dim or (input_dim - 2)  # D = input_dim-2
+        # initial projection
+        self.project_in  = nn.Sequential(
+            nn.Linear(input_dim, model_dim),
+            nn.SiLU()
+        )
+        # residual blocks
+        self.blocks = nn.ModuleList([ResBlock(model_dim) for _ in range(n_blocks)])
+        # final projection
+        self.project_out = nn.Sequential(
+            nn.LayerNorm(model_dim),
+            nn.SiLU(),
+            nn.Linear(model_dim, output_dim)
+        )
+
+    def forward(self, x):
+        # x: [B, D+2]
+        h = self.project_in(x)           # [B, model_dim]
+        for block in self.blocks:
+            h = block(h)                 # [B, model_dim]
+        return self.project_out(h)       # [B, D]
+
+# ────────────────────────────────────────────────────────────────
+# 8) The IMM model (general latent‐dimension D = z_dim)
+# ────────────────────────────────────────────────────────────────
+class IMM(nn.Module):
+    def __init__(self,
+                 network: nn.Module,
+                 parameterization: IMMParameterization,
+                 a: int = 1,
+                 b: int = 4,
+                 eta_max: float = 160.0,
+                 eta_min: float = 1e-8,
+                 k: int = 12,
+                 M: int = 16,
+                 D: int = 2):
+        """
+        network: a small MLP mapping R^(D+2) → R^D
+        parameterization: e.g. OtFmEulerFmParameterization(sigma_data)
+        a, b, eta_max, eta_min, k, M: hyperparams
+        D: latent dimension (e.g. 2 or 32)
+        """
+        super().__init__()
+        self.network = network
+        self.parameterization = parameterization
+        self.schedule = parameterization.schedule
+
+        self.D = D
+        self.a = a
+        self.b = b
+        self.eta_max = eta_max
+        self.eta_min = eta_min
+        self.k = k
+        self.M = M
+
+    def forward(self, x_t: torch.Tensor, s: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        # x_t: [B, D], s,t: [B,1]
+        skip = self.parameterization.c_skip(s, t) * x_t  # [B, D]
+
+        # Build model input = [ x_t * c_in(t), c_noise(s), c_noise(t) ]
+        c_in_t = self.parameterization.c_in(t)       # [B, 1]
+        x_scaled = x_t * c_in_t                       # [B, D]
+        noise_s = self.parameterization.c_noise(s)    # [B, 1]
+        noise_t = self.parameterization.c_noise(t)    # [B, 1]
+        inp = torch.cat([x_scaled, noise_s, noise_t], dim=-1)  # [B, D+2]
+
+        out = self.network(inp)                               # [B, D]
+        out = self.parameterization.c_out(s, t) * out         # [B, D]
+        return skip + out
+
+    def _ddim(self,
+              x_source: torch.Tensor,
+              x_target: torch.Tensor,
+              s: torch.Tensor,
+              t: torch.Tensor) -> torch.Tensor:
+        # x_source @ time t, x_target @ time 0 → produce x @ time s
+        a_s = self.schedule.alpha(s)   # [B,1]
+        a_t = self.schedule.alpha(t)   # [B,1]
+        sig_s = self.schedule.sigma(s) # [B,1]
+        sig_t = self.schedule.sigma(t) # [B,1]
+
+        term1 = (a_s - (sig_s / sig_t) * a_t) * x_target    # [B, D]
+        term2 = (sig_s / sig_t) * x_source                 # [B, D]
+        return term1 + term2
+
+    def _kernel(self,
+                x: torch.Tensor,
+                y: torch.Tensor,
+                s: torch.Tensor,
+                t: torch.Tensor) -> torch.Tensor:
+        # Pairwise kernel between x and y at times s < t
+        eps = 1e-8
+        c_out_st = self.parameterization.c_out(s, t)           # [N,1]
+        w = torch.abs(1.0 / (c_out_st + eps))                   # [N,1]
+
+        diff = x - y                                           # [N, D]
+        dist = torch.norm(diff, p=2, dim=-1).clamp(min=eps)     # [N,]
+        w_flat = w.view_as(dist)                               # [N,]
+        log_k = -w_flat * dist / float(self.D)                  # [N,]
+
+        mask = (t.view(-1) > s.view(-1))                        # [N,]
+        return torch.where(mask, torch.exp(log_k), torch.zeros_like(log_k))  # [N,]
+
+    def _kernel_for_diff(self,
+                         difference: torch.Tensor,
+                         s: torch.Tensor,
+                         t: torch.Tensor) -> torch.Tensor:
+        zeros = torch.zeros_like(difference)
+        return self._kernel(difference, zeros, s.unsqueeze(-1), t.unsqueeze(-1))
+
+    def _weight_fn(self, s: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        # s,t: [N,1]
+        t_flat = t.view(-1)                             # [N,]
+        a_t = self.schedule.alpha(t).view(-1)           # [N,]
+        sig_t = self.schedule.sigma(t).view(-1)         # [N,]
+        logSNR_t = self.schedule.lamb(t).view(-1)       # [N,]
+        dlogSNR_t = self.schedule.lamb_diff(t).view(-1) # [N,]
+
+        coef = 0.5 * torch.sigmoid(self.b - logSNR_t) * (-dlogSNR_t)  # [N,]
+        denom = a_t.pow(2) + sig_t.pow(2)                              # [N,]
+        num = a_t.pow(self.a)                                         # [N,]
+        return coef * num / denom                                     # [N,]
+
+    def _map_fn(self, s: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        eps = (self.eta_max - self.eta_min) / (2 ** self.k)
+        eta_t = self.schedule.eta(t)                 # [B,1]
+        val = eta_t - eps
+        inv = self.schedule.eta_inv(val)             # [B,1]
+        return torch.maximum(s, inv)                  # [B,1]
+
+    def compute_loss(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        x: [B, D], B must be divisible by M
+        returns: scalar joint IMM loss
+        """
+        B = x.shape[0]
+        M = self.M
+        assert B % M == 0, f"Batch size ({B}) not divisible by M ({M})"
+
+        G = B // M  # number of groups
+        # 1) sample z_prior ~ N(0, σ_data² I) at t=1
+        z_prior = self.parameterization.sigma_data * torch.randn_like(x)
+
+        # 2) sample t_single ∈ [tmin, tmax], s_single ∈ [tmin, t_single]
+        t_range = self.schedule.tmax - self.schedule.tmin
+        t_single = torch.rand((G, 1), device=x.device) * t_range + self.schedule.tmin  # [G,1]
+        s_single = torch.rand((G, 1), device=x.device) * (t_single - self.schedule.tmin) + self.schedule.tmin  # [G,1]
+
+        # 3) repeat each M‐times → [B,1]
+        t = t_single.repeat_interleave(M, dim=0)  # [B,1]
+        s = s_single.repeat_interleave(M, dim=0)  # [B,1]
+
+        # 4) r = map_fn(s, t)
+        r = self._map_fn(s, t)  # [B,1]
+
+        # 5) x_t = ddim(z_prior, x, t, 1)
+        one_t = torch.ones_like(t)           # [B,1]
+        x_t = self._ddim(z_prior, x, t, one_t)  # [B, D]
+
+        # 6) x_r = ddim(x_t, x, r, t)
+        x_r = self._ddim(x_t, x, r, t)       # [B, D]
+
+        # 7) f_x_t, f_x_r
+        f_x_t = self.forward(x_t, s, t)      # [B, D]
+        f_x_r = self.forward(x_r, s, r).detach()  # [B, D]
+
+        # 8) reshape to [G, M, D]
+        f_x_t = f_x_t.view(G, M, self.D)     # [G, M, D]
+        f_x_r = f_x_r.view(G, M, self.D)     # [G, M, D]
+
+        # 9) pairwise differences (G × M × M × D)
+        diff1 = (f_x_t.unsqueeze(1) - f_x_t.unsqueeze(2)).reshape(G*M*M, self.D)
+        diff2 = (f_x_r.unsqueeze(1) - f_x_r.unsqueeze(2)).reshape(G*M*M, self.D)
+        diff3 = (f_x_t.unsqueeze(1) - f_x_r.unsqueeze(2)).reshape(G*M*M, self.D)
+
+        # 10) build ss, ts, rs arrays of length G*M*M
+        ss = s_single.repeat_interleave(M*M, dim=0).view(-1)  # [G*M*M,]
+        ts = t_single.repeat_interleave(M*M, dim=0).view(-1)  # [G*M*M,]
+        rs = self._map_fn(ss.unsqueeze(-1), ts.unsqueeze(-1)).view(-1)  # [G*M*M,]
+
+        # 11) compute kernel terms
+        term1 = self._kernel_for_diff(diff1, ss, ts)  # [G*M*M,]
+        term2 = self._kernel_for_diff(diff2, ss, rs)  # [G*M*M,]
+        term3 = -2.0 * self._kernel_for_diff(diff3, ss, ts)  # [G*M*M,]
+
+        # 12) weights
+        weights = self._weight_fn(ss.unsqueeze(-1), ts.unsqueeze(-1))  # [G*M*M,]
+
+        joint = term1 + term2 + term3  # [G*M*M,]
+        return torch.mean(joint * weights)
+
+    def sample(self, n_samples: int, times: torch.Tensor) -> torch.Tensor:
+        """
+        times: 1D tensor in descending order, e.g. [1.0, 0.9, ..., tmin]
+        returns: [n_samples, D] latents at t=tmin
+        """
+        device = next(self.parameters()).device
+        x = self.parameterization.sigma_data * torch.randn((n_samples, self.D), device=device)
+        for i in range(len(times) - 1):
+            t_val = times[i]
+            s_val = times[i+1]
+            t_tensor = torch.full((n_samples, 1), t_val, device=device)
+            s_tensor = torch.full((n_samples, 1), s_val, device=device)
+            x = self.forward(x, s_tensor, t_tensor)
+        return x  # [n_samples, D]
+
+# ────────────────────────────────────────────────────────────────
+# 9) Utility to tile [batch,28,28,1] → grid image
+# ────────────────────────────────────────────────────────────────
+def convert_to_display(samples: np.ndarray) -> np.ndarray:
+    """
+    Tile a batch of images into a square grid.
+    samples: [B, H, W, C], B must be a perfect square.
+    Returns: [H*grid, W*grid, C].
+    """
+    B, H, W, C = samples.shape
+    cnt = int(math.sqrt(B))
+    assert cnt*cnt == B, "batch size must be a perfect square"
+    # first reshape into (grid_y, grid_x, H, W, C)
+    grid = samples.reshape(cnt, cnt, H, W, C)
+    # swap axes to (grid_y, H, grid_x, W, C)
+    grid = grid.transpose(0, 2, 1, 3, 4)
+    # merge to (grid_y*H, grid_x*W, C)
+    grid = grid.reshape(cnt * H, cnt * W, C)
+    return grid
+# ────────────────────────────────────────────────────────────────
+# 10) to visualize the reconstructed images
+# ────────────────────────────────────────────────────────────────
+# def show_reconstructions(model, dataloader, device, n=8):
+#     """
+#     Grab one batch from dataloader, run it through model,
+#     and plot the first n originals vs reconstructions.
+#     """
+#     model.eval()
+#     # grab a single batch
+#     imgs, _ = next(iter(dataloader))
+#     imgs = imgs.to(device)
+
+#     # forward pass
+#     with torch.no_grad():
+#         z, recon = model(imgs)        # or: recon, mu, logvar = model(imgs)
+#     # take first n
+#     origs = imgs[:n]
+#     recs  = recon[:n]
+
+#     # make two image-grids
+#     grid_orig = torchvision.utils.make_grid(origs.cpu(), nrow=n, normalize=True)
+#     grid_recon= torchvision.utils.make_grid(recs.cpu(),  nrow=n, normalize=True)
+
+#     # plot
+#     plt.figure(figsize=(2*n,4))
+#     plt.subplot(1,2,1)
+#     plt.title("Originals")
+#     plt.axis("off")
+#     plt.imshow(np.transpose(grid_orig, (1,2,0)))
+#     plt.subplot(1,2,2)
+#     plt.title("Reconstructions")
+#     plt.axis("off")
+#     plt.imshow(np.transpose(grid_recon, (1,2,0)))
+#     plt.show()
+
+#     model.train()
+def show_reconstructions(model, dataloader, device, n=8):
+    """
+    Grab one batch from dataloader, run it through model,
+    and plot the first n originals vs reconstructions,
+    denormalizing from [-1,1] → [0,1].
+    """
+    model.eval()
+    # grab a single batch
+    imgs, _ = next(iter(dataloader))
+    imgs = imgs.to(device)
+
+    # forward pass
+    with torch.no_grad():
+        z, recon, _, _ = model(imgs)
+
+    # take first n
+    origs = imgs[:n].cpu()
+    recs  = recon[:n].cpu()
+
+    # undo Normalize(mean=0.5,std=0.5): x_denorm = x*0.5 + 0.5
+    origs = origs * 0.5 + 0.5
+    recs  = recs  * 0.5 + 0.5
+
+    # clamp just in case of numerical overshoot
+    origs = origs.clamp(0, 1)
+    recs  = recs.clamp(0, 1)
+
+    # make two image-grids (no internal normalization)
+    grid_orig  = torchvision.utils.make_grid(origs, nrow=n)
+    grid_recon = torchvision.utils.make_grid(recs,  nrow=n)
+
+    # plot
+    plt.figure(figsize=(2*n, 4))
+    plt.subplot(1, 2, 1)
+    plt.title("Originals")
+    plt.axis("off")
+    plt.imshow(np.transpose(grid_orig, (1, 2, 0)))
+    plt.subplot(1, 2, 2)
+    plt.title("Reconstructions")
+    plt.axis("off")
+    plt.imshow(np.transpose(grid_recon, (1, 2, 0)))
+    plt.show()
+
+    model.train()
+
+
+# ────────────────────────────────────────────────────────────────
+# 10) The combined “MMD + IMM” training loop
+# ────────────────────────────────────────────────────────────────
+def train(
+    dataloader,
+    z_dim=2,
+    n_epochs=10,
+    use_cuda=True,
+    print_every=100,
+    plot_every=500
+):
+    device = torch.device("cuda" if (torch.cuda.is_available() and use_cuda) else "cpu")
+    print("Current CUDA device:", torch.cuda.current_device(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else "n/a")
+
+    # 10.1) Instantiate IMM (D = z_dim, M = 16)
+    parametrization = OtFmEulerFmParameterization(sigma_data=1.0)
+    #imm_net = get_mlp(hidden_dim=256, n_hidden=6, input_dim=z_dim+2, output_dim=z_dim).to(device)
+    #imm_net = get_mlp(hidden_dim=2048, n_hidden=32, input_dim=z_dim+2, output_dim=z_dim)
+    imm_net = ResidualDenoiser(input_dim = z_dim + 2, model_dim = 1024, n_blocks  = 8, output_dim= z_dim) #.to(device)
+    imm_model = IMM(
+        network=imm_net,
+        parameterization=parametrization,
+        a=1, b=4, eta_max=160.0, eta_min=1e-8, k=12, M=32,
+        D=z_dim
+    ).to(device)
+
+    # 10.2) Instantiate the VAE (Encoder + Decoder)
+    model = Model(3, 32, 3, 128, z_dim, 32, 32).to(device)
+
+    # 10.3) Two optimizers: VAE params and IMM params
+    optimizer_vae = torch.optim.Adam(model.parameters(), lr=1e-3)
+    optimizer_imm = torch.optim.Adam(imm_model.parameters(), lr=1e-5)
+
+    step_idx = 0
+    for epoch in range(n_epochs):
+        model.train()
+        imm_model.train()
+
+        for images, _labels in dataloader:
+            step_idx += 1
+
+            # ─── Zero gradients for both optimizers ───
+            # optimizer_vae.zero_grad()
+            # optimizer_imm.zero_grad()
+
+            # ─── Move batch to device ───
+            x = images.to(device)  # [B,1,28,28]
+
+            # ─── Forward pass through VAE ───
+            z, x_recon, mu, logvar = model(x)  # z: [B, z_dim], x_recon: [B,1,28,28]
+            z_det = z.detach()
+
+            # (1) Reconstruction loss (MSE)
+            nll = F.mse_loss(x_recon, x, reduction='mean')
+
+            # (2) MMD term: sample “true” N(0,1) latents of size [B, z_dim]
+            B = z.shape[0]
+            # Ensure B is divisible by IMM.M=16
+            assert B % imm_model.M == 0, f"Batch size ({B}) must be divisible by IMM.M ({imm_model.M})"
+            true_samples = torch.randn((B, z_dim), device=device)
+            mmd = compute_mmd(true_samples, z)
+            kl = compute_kl(mu, logvar)
+
+            n_samples = z.shape[0]           # match batch size
+            times = torch.linspace(1.0,
+            imm_model.schedule.tmin,
+            steps=32,
+            device=device)   # e.g. [1.0,0.857,0.714,…,0.0]
+
+            # Now sample z_imm ∈ R^{B×z_dim} using the learned IMM denoiser
+            z_imm = imm_model.sample(n_samples, times)  # [B, z_dim]
+
+            # (b) Prior‐matching MMD between z_enc and z_imm
+            prior_mmd = compute_mmd(z_imm, z)
+
+            # (3) IMM joint‐loss on z
+            #imm_loss = imm_model.compute_loss(z_det)
+
+            # (4) Total loss = reconstruction + 0.1*mmd + imm_loss
+            #loss = nll + .1*prior_mmd + 1e-2*imm_loss
+            loss_vae = nll +  1e-3 * kl #1* prior_mmd +
+            #loss_imm_net = 1 * imm_loss
+
+            optimizer_vae.zero_grad()
+            optimizer_imm.zero_grad()
+
+            # Backprop both objectives on the same graph:
+            loss_vae.backward(retain_graph=True)   # keep the graph alive so IMM can still use it
+            #loss_imm_net.backward()
+
+            # Now that both backward() calls have run, update both optimizers:
+            optimizer_vae.step()
+            optimizer_imm.step()
+            # (5) Backpropagate both
+            # loss.backward()
+            # optimizer.step()
+            # optimizer_imm.step()
+
+            if step_idx % print_every == 0:
+                print(
+                    f"[Epoch {epoch+1}/{n_epochs}  Step {step_idx}]  "
+                    f"Reconstruction={nll.item():.5f}  MMD={kl.item():.5f}  " #IMM={imm_loss.item():.5f}
+                )
+
+            # ─── Every plot_every steps: sample new digits via IMM → decode → show ───
+            if step_idx % plot_every == 0:
+                imm_model.eval()
+                #Show reconstructions of real batch
+                show_reconstructions(model, dataloader, device, n=8)
+                with torch.no_grad():
+                    n_vis = 100
+                    times = torch.linspace(
+                        1.0,
+                        imm_model.schedule.tmin,
+                        steps=32,
+                        device=device
+                    )
+                    #gen_z = imm_model.sample(n_vis, times)       # [100, z_dim]
+                    gen_z = torch.randn(100, z_dim, device=device)      # [100, z_dim]
+                    samples = model.decoder(gen_z)                # [100,1,28,28]
+                    # ---- Denormalize from [-1,1] → [0,1] ----
+                    samples = samples.cpu()
+                    samples = samples * 0.5 + 0.5    # if you used Normalize(0.5,0.5) during training
+                    samples = samples.clamp(0, 1)
+
+                    samples_np = samples.permute(0, 2, 3, 1).numpy()  # [B, H, W, 3]
+                    display_img = convert_to_display(samples_np)
+                    plt.figure(figsize=(4,4))
+                    plt.imshow(display_img)      # matplotlib auto‐detects RGB
+                    plt.title(f"Epoch {epoch+1}, Step {step_idx}: IMM→decode")
+                    plt.axis("off")
+                    plt.show()
+
+                imm_model.train()
+
+    return model, imm_model
+
+# ────────────────────────────────────────────────────────────────
+# 11) Run training in Colab
+# ────────────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    #set_seed(42)
+    # 11.1) Build a DataLoader whose batch_size is divisible by 16, and drop the last incomplete batch
+    torch.cuda.set_device(3)
+    batch_size = 128  # 192 % 16 == 0
+    image_size = 32    # target spatial size (64×64)
+    # 2) Define CelebA transform pipeline
+    celeba_transform = transforms.Compose([
+        transforms.Resize((image_size, image_size)),   # scale shorter side then center‐crop
+        transforms.CenterCrop(image_size),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5, 0.5, 0.5],      # map to [–1,1]
+                             std =[0.5, 0.5, 0.5]),
+    ])
+    celeba_train = DataLoader(
+        CelebA("./data/CelebA", split='train', download=True, transform = celeba_transform),
+        batch_size = batch_size,
+        shuffle = True,
+        drop_last = True,    # ← drop any partial final batch
+        num_workers = 0,     # reduce to 2 to avoid “too many workers” warning
+        pin_memory = True
+    )
+
+    # 11.2) Train for z_dim=2 and 10 epochs
+    z_dim = 64
+    vae_model, imm_model = train(
+        dataloader = celeba_train,
+        z_dim = z_dim,
+        n_epochs = 80,
+        use_cuda = True,
+        print_every = 200,
+        plot_every = 1000
+    )
+
+    # After this finishes, you have:
+    #   - `vae_model` (the trained VAE)
+    #   - `imm_model` (the trained IMM)
+    # You can now perform inference exactly as described earlier (reconstruction or generating new samples).
+--------------------
+
+Cell 1:
+import torch
+import torchvision
+from torchvision import transforms
+import numpy as np
+from scipy.linalg import sqrtm
+
+# ────────────────────────────────────────────────────────────────
+# 1) Inception feature extractor
+# ────────────────────────────────────────────────────────────────
+_inception = None
+def get_inception_features(x: torch.Tensor, device: torch.device, batch_size: int = 64):
+    """
+    x: [N,3,H,W] in [0,1]
+    returns: np.ndarray [N,2048]
+    """
+    global _inception
+    if _inception is None:
+        _inception = torchvision.models.inception_v3(pretrained=False, transform_input=False)
+        _inception.Mixed_7c.register_forward_hook(lambda m, i, o: setattr(_inception, "_pool3", o))
+        _inception.fc = torch.nn.Identity()
+        # **load form the local checkpoint**
+        ckpt = torch.load("./inception_pool3.pth", map_location=device)
+         # remove the fc parameters from the checkpoint so they don’t mismatch
+        ckpt.pop("fc.weight", None)
+        ckpt.pop("fc.bias",   None)
+        _inception.load_state_dict(ckpt, strict=False)
+        _inception.eval().to(device)
+
+    # preprocess to Inception’s expected input
+    preprocess = transforms.Compose([
+        transforms.Resize((299,299)),
+        transforms.Normalize(mean=[0.485,0.456,0.406],
+                             std =[0.229,0.224,0.225])
+    ])
+
+    feats = []
+    with torch.no_grad():
+        for i in range(0, x.shape[0], batch_size):
+            batch = x[i : i+batch_size].to(device)
+            batch = preprocess(batch)
+            _ = _inception(batch)
+            pool3 = _inception._pool3  # [B,2048, 8, 8]
+            # global-average pool to [B,2048]
+            f = torch.nn.functional.adaptive_avg_pool2d(pool3, (1,1)).view(batch.size(0), -1)
+            feats.append(f.cpu().numpy())
+    return np.concatenate(feats, axis=0)
+
+# ────────────────────────────────────────────────────────────────
+# 2) FID computation
+# ────────────────────────────────────────────────────────────────
+def compute_fid_from_tensors(
+    real_images: torch.Tensor,
+    fake_images: torch.Tensor,
+    device: torch.device,
+    batch_size: int = 64
+) -> float:
+    """
+    real_images, fake_images: [N,3,H,W] in [0,1]
+    returns: scalar FID
+    """
+    # 1) extract features
+    real_feats = get_inception_features(real_images, device, batch_size)  # [N,2048]
+    fake_feats = get_inception_features(fake_images, device, batch_size)
+
+    # 2) compute mean & cov
+    mu_r    = real_feats.mean(axis=0)
+    mu_g    = fake_feats.mean(axis=0)
+    sigma_r = np.cov(real_feats, rowvar=False)
+    sigma_g = np.cov(fake_feats,  rowvar=False)
+
+    # 3) sqrtm of cov product
+    covmean = sqrtm(sigma_r.dot(sigma_g))
+    if np.iscomplexobj(covmean):
+        covmean = covmean.real
+
+    # 4) frechet distance
+    diff = mu_r - mu_g
+    fid  = diff.dot(diff) + np.trace(sigma_r + sigma_g - 2*covmean)
+    return float(np.clip(fid, 0, None))
+
+
+# ────────────────────────────────────────────────────────────────
+# 3) Sample 5 000 fakes and reals, compute FID
+# ────────────────────────────────────────────────────────────────
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+n_vis = 10000
+times = torch.linspace(1.0, imm_model.schedule.tmin, steps=32, device=device)
+
+# 3.1) generate fake images
+with torch.no_grad():
+    #gen_z   = imm_model.sample(n_vis, times)           # [5000, z_dim]
+    gen_z = torch.randn(n_vis, z_dim, device=device) 
+    fakes   = vae_model.decoder(gen_z).cpu().clamp(-1,1)
+    fakes   = (fakes + 1) / 2                          # → [0,1]
+
+# 3.2) grab 5000 real images
+celeba_test = DataLoader(CelebA("./data/CelebA", split='test', download=False, transform = celeba_transform),
+        batch_size = batch_size,
+        shuffle = False,
+        drop_last = False,    # ← drop any partial final batch
+        num_workers = 0,     # reduce to 2 to avoid “too many workers” warning
+        pin_memory = True
+    )
+reals = []
+needed = n_vis
+it = iter(celeba_test)
+while needed > 0:
+    imgs, _ = next(it)                                 # [batch,3,H,W] in [-1,1]
+    reals.append(imgs.cpu().clamp(-1,1))
+    needed -= imgs.size(0)
+reals = torch.cat(reals, dim=0)[:n_vis]                # [5000,3,H,W]
+reals = (reals + 1) / 2                                # → [0,1]
+
+# 3.3) compute FID
+fid_score = compute_fid_from_tensors(reals, fakes, device, batch_size=64)
+print(f"FID (5 000 samples): {fid_score:.4f}")
+
+--------------------
+
+Cell 2:
+vae_model.eval()
+imm_model.eval()
+torch.set_grad_enabled(False)
+device = torch.device("cuda" if (torch.cuda.is_available()) else "cpu")
+
+num_gen = 100
+times = torch.linspace(1.0, imm_model.schedule.tmin, steps=32)  # e.g. [1.0,0.857,…,0.0]
+#z_gen = imm_model.sample(num_gen, times)    # [100, z_dim]
+z_gen = torch.randn(100, z_dim, device=device)  # [100, z_dim] random noise
+samples = vae_model.decoder(z_gen)          # [100,1,28,28]
+ # ---- Denormalize from [-1,1] → [0,1] ----
+samples = samples.cpu()
+samples = samples * 0.5 + 0.5    # if you used Normalize(0.5,0.5) during training
+samples = samples.clamp(0, 1)
+samples_np = samples.permute(0,2,3,1).numpy()  # [100,28,28,1]
+plt.figure(figsize=(4,4))
+plt.imshow(convert_to_display(samples_np))
+plt.axis("off")
+plt.show()
+--------------------
+
+Cell 3:
+import torch
+import torch.nn.functional as F
+
+def calc_reconstruction_mse(vae_model, dataloader, device):
+    """
+    Computes the average per-pixel MSE between inputs and VAE reconstructions.
+    Assumes vae_model.encoder(x) → (mu, logvar) and vae_model.decoder(z).
+    """
+    vae_model.eval()
+    total_loss = 0.0
+    total_imgs = 0
+
+    with torch.no_grad():
+        for imgs, _ in dataloader:
+            imgs = imgs.to(device)                       # [B,3,H,W] in normalized range
+            mu, logvar = vae_model.encoder(imgs)
+            z = vae_model.reparameterize(mu, logvar)
+            recon = vae_model.decoder(z)                 # same shape as imgs
+
+            # If your decoder outputs in [-1,1] (Tanh), and your inputs are normalized the same,
+            # you can compute MSE directly. Otherwise denormalize both to [0,1] first.
+            loss = F.mse_loss(recon, imgs, reduction="sum")
+            total_loss += loss.item()
+            total_imgs += imgs.numel()   # number of elements = B*C*H*W
+
+    # average per-pixel MSE
+    avg_mse = total_loss / total_imgs
+    print(f"Avg reconstruction MSE: {avg_mse:.6e}")
+    return avg_mse
+
+# --- usage ---
+celeba_test_loader = DataLoader(
+    CelebA(root="./data/CelebA", split="test", download=False, transform=celeba_transform),
+    batch_size=128, shuffle=False, drop_last=False, num_workers=0, pin_memory=True
+)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+calc_reconstruction_mse(vae_model, celeba_test_loader, device)
+--------------------

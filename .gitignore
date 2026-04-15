@@ -1,0 +1,23 @@
+# Datasets and downloaded archives
+/data/
+/final_project/data/
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.part
+
+# Training artifacts and model weights
+/checkpoints/
+/checkpoints_cifar_test/
+*.pth
+*.pt
+*.ckpt
+
+# Python and notebook caches
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Temporary Office lock files
+~$*

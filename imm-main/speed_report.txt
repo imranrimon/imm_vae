@@ -1,0 +1,3 @@
+--- e:/imm_vae/checkpoints_v2/CelebA/vae/ckpt_imm*.pth ---
+--- e:/imm_vae/checkpoints_v2/CelebA/vae/ckpt_mmd*.pth ---
+--- e:/imm_vae/checkpoints_v2/CelebA/nvae/ckpt_kl*.pth ---
