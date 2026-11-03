@@ -1,0 +1,5 @@
+Backbone,Prior,NFE,FID_std
+nvae_fine8,"z_g~N(0,1.0) + WHITENED DDPM (eta=1)",50,42.043
+nvae_fine8,"z_g~N(0,1.0) + WHITENED DDPM (eta=1)",250,43.535
+nvae_fine8,"z_g~N(0,1.4) + WHITENED DDPM (eta=1)",50,35.444
+nvae_fine8,"z_g~N(0,1.4) + WHITENED DDPM (eta=1)",250,35.984

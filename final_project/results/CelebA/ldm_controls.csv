@@ -1,0 +1,16 @@
+Backbone,Prior,NFE,FID_std,Variant
+ldm_ae,per-dim Gaussian sigma=0.6,0,125.479,
+ldm_ae,per-dim Gaussian sigma=0.8,0,149.227,
+ldm_ae,per-dim Gaussian sigma=1.0,0,186.831,
+ldm_ae,FULL-COV Gaussian,0,41.756,
+ldm_ae,FULL-COV + COPULA,0,40.404,
+ldm_ae_CelebA,per-dim Gaussian sigma=0.6,0,121.371,
+ldm_ae_CelebA,per-dim Gaussian sigma=0.8,0,178.24,
+ldm_ae_CelebA,per-dim Gaussian sigma=1.0,0,234.903,
+ldm_ae_CelebA,FULL-COV Gaussian,0,33.085,
+ldm_ae_CelebA,FULL-COV + COPULA,0,30.744,
+ldm_ae_CelebA,per-dim Gaussian sigma=0.6,0,57.443,closed-form-sigma
+ldm_ae_CelebA,per-dim Gaussian sigma=0.8,0,67.736,closed-form-sigma
+ldm_ae_CelebA,per-dim Gaussian sigma=1.0,0,109.491,closed-form-sigma
+ldm_ae_CelebA,FULL-COV Gaussian,0,30.455,closed-form-sigma
+ldm_ae_CelebA,FULL-COV + COPULA,0,29.622,closed-form-sigma

@@ -1,0 +1,6 @@
+Backbone,Prior,NFE,FID_std
+ldm_ae_ImageNet32,per-dim Gaussian sigma=0.6,0,188.789
+ldm_ae_ImageNet32,per-dim Gaussian sigma=0.8,0,201.691
+ldm_ae_ImageNet32,per-dim Gaussian sigma=1.0,0,210.4
+ldm_ae_ImageNet32,FULL-COV Gaussian,0,127.854
+ldm_ae_ImageNet32,FULL-COV + COPULA,0,126.644

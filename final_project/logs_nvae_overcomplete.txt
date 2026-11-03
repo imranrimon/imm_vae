@@ -1,0 +1,14 @@
+  reference: 50000 real (cached)
+  nvae_proper BN recal, uniform t=1.0                      NFE=   0  FID_std=  68.036
+  nvae_proper BN recal, uniform t=0.8                      NFE=   0  FID_std=  51.306
+  nvae_proper BN recal, uniform t=0.7                      NFE=   0  FID_std=  50.755
+  nvae_proper BN recal, coarse t=1 / fine (4-6) t=0.6      NFE=   0  FID_std=  53.510
+  nvae_proper BN recal, coarse t=1 / fine (4-6) t=0.7      NFE=   0  FID_std=  56.177
+  nvae_proper BN recal, coarse t=1 / fine (4-6) t=0.8      NFE=   0  FID_std=  59.421
+   Backbone                                   Prior  NFE          Variant  FID_std
+nvae_proper                 BN recal, uniform t=1.0    0 overcomplete-50k   68.036
+nvae_proper                 BN recal, uniform t=0.8    0 overcomplete-50k   51.306
+nvae_proper                 BN recal, uniform t=0.7    0 overcomplete-50k   50.755
+nvae_proper BN recal, coarse t=1 / fine (4-6) t=0.6    0 overcomplete-50k   53.510
+nvae_proper BN recal, coarse t=1 / fine (4-6) t=0.7    0 overcomplete-50k   56.177
+nvae_proper BN recal, coarse t=1 / fine (4-6) t=0.8    0 overcomplete-50k   59.421

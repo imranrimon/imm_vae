@@ -1,0 +1,6 @@
+Prior,NFE,FID
+"TRUE encoder (z_global, z_fine)",0,7.206
+"N(0,1) z_global + decoder p(z_fine|h)",0,55.141
+"N(0,1) z_global + RESIDUAL MeanFlow",1,47.139
+"N(0,1) z_global + RESIDUAL MeanFlow",2,47.295
+"N(0,1) z_global + RESIDUAL MeanFlow",4,47.376

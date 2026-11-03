@@ -1,0 +1,7 @@
+Backbone,Prior,NFE,FID_std
+nvae_fine8,"z_g~N(0,1.0) + FULL-COV residual [floor]",0,41.654
+nvae_fine8,"z_g~N(0,1.4) + FULL-COV residual [floor]",0,35.323
+nvae_fine8,"z_g~N(0,1.0) + WHITENED MeanFlow",1,41.639
+nvae_fine8,"z_g~N(0,1.0) + WHITENED MeanFlow",2,41.64
+nvae_fine8,"z_g~N(0,1.4) + WHITENED MeanFlow",1,35.304
+nvae_fine8,"z_g~N(0,1.4) + WHITENED MeanFlow",2,35.305

@@ -1,0 +1,6 @@
+Backbone,Prior,NFE,FID_std
+ldm_ae_CelebA64,per-dim Gaussian sigma=0.6,0,178.943
+ldm_ae_CelebA64,per-dim Gaussian sigma=0.8,0,276.236
+ldm_ae_CelebA64,per-dim Gaussian sigma=1.0,0,318.565
+ldm_ae_CelebA64,FULL-COV Gaussian,0,65.618
+ldm_ae_CelebA64,FULL-COV + COPULA,0,63.516

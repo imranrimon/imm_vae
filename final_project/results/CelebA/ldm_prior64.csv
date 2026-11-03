@@ -1,0 +1,11 @@
+Backbone,Prior,NFE,FID_std,Variant
+ldm_ae_CelebA,imm conv prior,1,24.145,
+ldm_ae_CelebA,imm conv prior,2,21.176,
+ldm_ae_CelebA,imm conv prior,4,20.312,
+ldm_ae_CelebA,imm conv prior,8,20.491,
+ldm_ae_CelebA,imm conv prior,16,20.934,
+ldm_ae_CelebA,imm conv prior,1,27.04,w192b6
+ldm_ae_CelebA,imm conv prior,2,24.317,w192b6
+ldm_ae_CelebA,imm conv prior,4,23.374,w192b6
+ldm_ae_CelebA,imm conv prior,8,24.204,w192b6
+ldm_ae_CelebA,imm conv prior,16,25.034,w192b6

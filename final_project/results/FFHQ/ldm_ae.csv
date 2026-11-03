@@ -1,0 +1,4 @@
+Backbone,Prior,NFE,FID_std
+ldm_ae_FFHQ,TRUE encoder latents [ceiling] z4,0,5.49
+ldm_ae_FFHQ,per-dim Gaussian prior sigma=1.0 z4,0,242.141
+ldm_ae_FFHQ,per-dim Gaussian prior sigma=1.2 z4,0,261.067

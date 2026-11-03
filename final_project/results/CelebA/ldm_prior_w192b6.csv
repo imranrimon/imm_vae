@@ -1,0 +1,10 @@
+Backbone,Prior,NFE,FID_std
+ldm_ae,meanflow conv prior,1,14.192
+ldm_ae,meanflow conv prior,2,13.647
+ldm_ae,meanflow conv prior,4,15.132
+ldm_ae,meanflow conv prior,8,15.911
+ldm_ae,imm conv prior,1,8.653
+ldm_ae,imm conv prior,2,7.461
+ldm_ae,imm conv prior,4,6.943
+ldm_ae,imm conv prior,8,6.797
+ldm_ae,imm conv prior,16,6.793

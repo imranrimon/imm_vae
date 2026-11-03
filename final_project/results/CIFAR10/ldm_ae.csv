@@ -1,0 +1,4 @@
+Backbone,Prior,NFE,FID_std
+ldm_ae_CIFAR10,TRUE encoder latents [ceiling] z4,0,15.325
+ldm_ae_CIFAR10,per-dim Gaussian prior sigma=1.0 z4,0,183.103
+ldm_ae_CIFAR10,per-dim Gaussian prior sigma=1.2 z4,0,198.143

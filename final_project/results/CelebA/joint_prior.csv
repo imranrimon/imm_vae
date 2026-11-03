@@ -1,0 +1,7 @@
+Prior,NFE,FID
+"z_global N(0,1.0) + decoder p(z_fine)",0,55.141
+"z_global N(0,1.3) + decoder p(z_fine)",0,46.399
+"z_global N(0,1.5) + decoder p(z_fine)",0,44.451
+JOINT MeanFlow (z_global + z_fine),1,216.438
+JOINT MeanFlow (z_global + z_fine),2,216.797
+JOINT MeanFlow (z_global + z_fine),4,217.263

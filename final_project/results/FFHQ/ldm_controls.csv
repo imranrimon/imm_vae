@@ -1,0 +1,6 @@
+Backbone,Prior,NFE,FID_std
+ldm_ae_FFHQ,per-dim Gaussian sigma=0.6,0,168.608
+ldm_ae_FFHQ,per-dim Gaussian sigma=0.8,0,211.988
+ldm_ae_FFHQ,per-dim Gaussian sigma=1.0,0,242.189
+ldm_ae_FFHQ,FULL-COV Gaussian,0,37.807
+ldm_ae_FFHQ,FULL-COV + COPULA,0,36.786

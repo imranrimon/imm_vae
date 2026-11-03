@@ -1,0 +1,6 @@
+Backbone,Prior,NFE,FID_std
+ldm_ae_LSUN,per-dim Gaussian sigma=0.6,0,98.759
+ldm_ae_LSUN,per-dim Gaussian sigma=0.8,0,119.249
+ldm_ae_LSUN,per-dim Gaussian sigma=1.0,0,152.555
+ldm_ae_LSUN,FULL-COV Gaussian,0,79.006
+ldm_ae_LSUN,FULL-COV + COPULA,0,77.292

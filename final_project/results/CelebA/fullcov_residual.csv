@@ -1,0 +1,9 @@
+z_global,z_fine,FID
+"N(0,1.0)",decoder diag,55.141
+"N(0,1.0)",full-cov,39.541
+"N(0,1.2)",decoder diag,48.421
+"N(0,1.2)",full-cov,36.127
+"N(0,1.4)",decoder diag,45.114
+"N(0,1.4)",full-cov,35.16
+"N(0,1.6)",decoder diag,44.324
+"N(0,1.6)",full-cov,35.793

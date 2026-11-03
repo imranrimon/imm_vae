@@ -1,0 +1,6 @@
+Backbone,Prior,NFE,FID_std
+ldm_ae,imm conv prior,1,9.538
+ldm_ae,imm conv prior,2,8.438
+ldm_ae,imm conv prior,4,8.002
+ldm_ae,imm conv prior,8,7.823
+ldm_ae,imm conv prior,16,7.834

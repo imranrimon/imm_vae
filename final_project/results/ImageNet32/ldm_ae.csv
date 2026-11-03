@@ -1,0 +1,4 @@
+Backbone,Prior,NFE,FID_std
+ldm_ae_ImageNet32,TRUE encoder latents [ceiling] z4,0,42.667
+ldm_ae_ImageNet32,per-dim Gaussian prior sigma=1.0 z4,0,210.427
+ldm_ae_ImageNet32,per-dim Gaussian prior sigma=1.2 z4,0,217.817

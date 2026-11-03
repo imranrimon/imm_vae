@@ -1,0 +1,15 @@
+Backbone,Prior,NFE,FID_std,Variant
+ldm_ae_CIFAR10,imm conv prior,1,48.209,
+ldm_ae_CIFAR10,imm conv prior,2,46.357,
+ldm_ae_CIFAR10,imm conv prior,4,45.792,
+ldm_ae_CIFAR10,imm conv prior,8,45.992,
+ldm_ae_CIFAR10,imm conv prior,16,46.371,
+ldm_ae_CIFAR10,meanflow conv prior,1,66.015,w192b6
+ldm_ae_CIFAR10,meanflow conv prior,2,65.96,w192b6
+ldm_ae_CIFAR10,meanflow conv prior,4,67.883,w192b6
+ldm_ae_CIFAR10,meanflow conv prior,8,69.152,w192b6
+ldm_ae_CIFAR10,imm conv prior,1,48.331,w192b6
+ldm_ae_CIFAR10,imm conv prior,2,46.213,w192b6
+ldm_ae_CIFAR10,imm conv prior,4,45.86,w192b6
+ldm_ae_CIFAR10,imm conv prior,8,46.053,w192b6
+ldm_ae_CIFAR10,imm conv prior,16,46.499,w192b6

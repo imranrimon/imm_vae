@@ -1,0 +1,35 @@
+Backbone,Prior,NFE,Variant,FID_std
+nvae_proper,posterior reconstructions [ceiling],0,s3g2z8,2.012
+nvae_proper,ancestral sampling t=0.6,0,s3g2z8,81.399
+nvae_proper,ancestral sampling t=0.8,0,s3g2z8,74.518
+nvae_proper,ancestral sampling t=1.0,0,s3g2z8,144.819
+nvae_proper,ancestral t=0.8 [baseline],0,topprior,74.519
+nvae_proper,ancestral t=1.0 [baseline],0,topprior,144.819
+nvae_proper,IMM top-group prior,1,topprior,80.045
+nvae_proper,IMM top-group prior,4,topprior,80.538
+nvae_proper,IMM top-group prior,8,topprior,79.984
+nvae_proper,posterior reconstructions [ceiling],0,s3g2z8_gn,1.672
+nvae_proper,ancestral sampling t=0.8,0,s3g2z8_gn,78.64
+nvae_proper,ancestral sampling t=1.0,0,s3g2z8_gn,137.077
+nvae_proper,ancestral t=1.0 [group baseline],0,fineprior_gn,137.081
+nvae_proper,ancestral t=0.8 [group baseline],0,fineprior_gn,78.64
+nvae_proper,"fine-group IMM priors (4,5,6)",1,fineprior_gn,95.82
+nvae_proper,"fine-group IMM priors (4,5,6)",4,fineprior_gn,98.028
+nvae_proper,ancestral t=0.7 uniform + BN recal,0,besttemp,50.608
+nvae_proper,posterior reconstructions [ceiling],0,s3g400z1,11.787
+nvae_proper,ancestral sampling t=0.8,0,s3g400z1,63.37
+nvae_proper,ancestral sampling t=1.0,0,s3g400z1,75.829
+nvae_proper,ancestral t=0.8 + BN recal,0,s3g400z1,47.593
+nvae_proper,ancestral t=1.0 + BN recal,0,s3g400z1,67.176
+nvae_proper,sched p=0.3: reconstructions [ceiling],0,s3g400z1-sched0.3,13.01
+nvae_proper,sched p=0.3: ancestral t=0.8,0,s3g400z1-sched0.3,72.771
+nvae_proper,sched p=0.3: ancestral t=1.0,0,s3g400z1-sched0.3,64.136
+nvae_proper,sched p=0.3: ancestral t=0.8 + BN recal,0,s3g400z1-sched0.3,41.877
+nvae_proper,baseline @ own optimum t=0.6,0,temp-matched,44.003
+nvae_proper,sched p=0.3 @ own optimum t=0.9,0,temp-matched,40.657
+nvae_proper,"BN recal, uniform t=1.0",0,overcomplete-50k,68.036
+nvae_proper,"BN recal, uniform t=0.8",0,overcomplete-50k,51.306
+nvae_proper,"BN recal, uniform t=0.7",0,overcomplete-50k,50.755
+nvae_proper,"BN recal, coarse t=1 / fine (4-6) t=0.6",0,overcomplete-50k,53.51
+nvae_proper,"BN recal, coarse t=1 / fine (4-6) t=0.7",0,overcomplete-50k,56.177
+nvae_proper,"BN recal, coarse t=1 / fine (4-6) t=0.8",0,overcomplete-50k,59.421

@@ -1,0 +1,11 @@
+Backbone,Prior,NFE,FID_std,Variant
+ldm_ae_ImageNet32,imm conv prior,1,80.753,
+ldm_ae_ImageNet32,imm conv prior,2,77.975,
+ldm_ae_ImageNet32,imm conv prior,4,77.136,
+ldm_ae_ImageNet32,imm conv prior,8,76.327,
+ldm_ae_ImageNet32,imm conv prior,16,75.854,
+ldm_ae_ImageNet32,imm conv prior,1,80.753,w192b6
+ldm_ae_ImageNet32,imm conv prior,2,77.975,w192b6
+ldm_ae_ImageNet32,imm conv prior,4,77.136,w192b6
+ldm_ae_ImageNet32,imm conv prior,8,76.327,w192b6
+ldm_ae_ImageNet32,imm conv prior,16,75.854,w192b6

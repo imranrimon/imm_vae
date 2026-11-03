@@ -1,0 +1,10 @@
+Backbone,Prior,NFE,FID_std,Variant
+ldm_ae_CelebA,TRUE encoder latents [ceiling] z4,0,2.006,
+ldm_ae_CelebA,per-dim Gaussian prior sigma=1.0 z4,0,234.867,
+ldm_ae_CelebA,per-dim Gaussian prior sigma=1.2 z4,0,267.7,
+ldm_ae_CelebA,TRUE encoder latents [ceiling] z4,0,2.008,ldm
+ldm_ae_CelebA,per-dim Gaussian prior sigma=1.0 z4,0,234.578,ldm
+ldm_ae_CelebA,per-dim Gaussian prior sigma=1.2 z4,0,267.599,ldm
+ldm_ae_CelebA,TRUE encoder latents [ceiling] z4,0,9.414,sigma-vae
+ldm_ae_CelebA,per-dim Gaussian prior sigma=1.0 z4,0,109.446,sigma-vae
+ldm_ae_CelebA,per-dim Gaussian prior sigma=1.2 z4,0,163.487,sigma-vae

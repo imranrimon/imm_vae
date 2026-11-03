@@ -1,0 +1,4 @@
+precision,recall,density,coverage,Prior
+0.0041,0.0,0.0008,0.0001,per-dim Gaussian
+0.5424,0.0066,0.277,0.1064,full-covariance Gaussian
+0.7181,0.2636,0.7861,0.5748,IMM conv prior (4 NFE)

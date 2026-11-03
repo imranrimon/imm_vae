@@ -1,0 +1,14 @@
+Backbone,Prior,NFE,FID_std
+nvae,"KL-Base  z_g~N(0,1)",0,42.215
+nvae,"MMD-Base z_g~N(0,1)",0,42.057
+nvae,"KL-Base  z_g~N(0,1.5) [temperature]",0,31.067
+nvae,DDPM prior (paper),1000,35.431
+nvae,IMM-legacy (paper headline),16,26.366
+nvae,IMM-fixed (corrected convention),1,32.916
+nvae,MeanFlow (1-step),1,40.333
+nvae_fine8,"z_g~N(0,1.0) + decoder diagonal",0,55.461
+nvae_fine8,"z_g~N(0,1.0) + FULL-COV residual",0,41.654
+nvae_fine8,"z_g~N(0,1.4) + decoder diagonal",0,43.383
+nvae_fine8,"z_g~N(0,1.4) + FULL-COV residual",0,35.323
+nvae_fine8,"z_g~N(0,1) + residual conv MeanFlow",1,45.655
+nvae_fine8,TRUE encoder latents [ceiling],0,5.906

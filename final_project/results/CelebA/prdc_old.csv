@@ -1,0 +1,5 @@
+precision,recall,density,coverage,Prior
+0.3121,0.2608,0.1237,0.163,Gaussian sigma=1.0 [FID 42.2]
+0.3568,0.425,0.1459,0.2056,Temperature sigma=1.5 [FID 31.1]
+0.4131,0.3884,0.186,0.259,"IMM-legacy, paper headline [FID 26.4]"
+0.3332,0.2442,0.1367,0.1795,"MeanFlow, best latent fit [FID 40.3]"

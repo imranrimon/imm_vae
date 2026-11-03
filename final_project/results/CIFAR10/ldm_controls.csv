@@ -1,0 +1,6 @@
+Backbone,Prior,NFE,FID_std
+ldm_ae_CIFAR10,per-dim Gaussian sigma=0.6,0,172.659
+ldm_ae_CIFAR10,per-dim Gaussian sigma=0.8,0,170.004
+ldm_ae_CIFAR10,per-dim Gaussian sigma=1.0,0,183.163
+ldm_ae_CIFAR10,FULL-COV Gaussian,0,95.243
+ldm_ae_CIFAR10,FULL-COV + COPULA,0,93.452

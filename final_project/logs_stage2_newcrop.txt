@@ -1,0 +1,118 @@
+device cuda | Stage 2 IMM prior on the CORRECTED CelebA crop
+cache: train (162770, 3, 32, 32)  test (19962, 3, 32, 32)
+--- Stage 2: Training IMM Prior on NVAE-CelebA ---
+Calculating robust global latent statistics from base model...
+  -> Calculated Global Mean: -0.0128, Global Std: 0.9969
+  -> Std Range: [0.8618, 1.3956]
+Stage 2 optimizer: Adam(lr=1e-05)
+Epoch 1: Train Loss 0.0183 | Val Loss 0.0178
+  -> New Best Prior Saved!
+Epoch 2: Train Loss 0.0180 | Val Loss 0.0171
+  -> New Best Prior Saved!
+Epoch 3: Train Loss 0.0180 | Val Loss 0.0178
+Epoch 4: Train Loss 0.0181 | Val Loss 0.0185
+Epoch 5: Train Loss 0.0182 | Val Loss 0.0181
+Epoch 6: Train Loss 0.0182 | Val Loss 0.0170
+  -> New Best Prior Saved!
+Epoch 7: Train Loss 0.0184 | Val Loss 0.0182
+Epoch 8: Train Loss 0.0181 | Val Loss 0.0185
+Epoch 9: Train Loss 0.0179 | Val Loss 0.0178
+Epoch 10: Train Loss 0.0183 | Val Loss 0.0185
+Epoch 11: Train Loss 0.0182 | Val Loss 0.0187
+Epoch 12: Train Loss 0.0179 | Val Loss 0.0191
+Epoch 13: Train Loss 0.0182 | Val Loss 0.0174
+Epoch 14: Train Loss 0.0182 | Val Loss 0.0180
+Epoch 15: Train Loss 0.0181 | Val Loss 0.0179
+Epoch 16: Train Loss 0.0178 | Val Loss 0.0190
+Epoch 17: Train Loss 0.0185 | Val Loss 0.0176
+Epoch 18: Train Loss 0.0179 | Val Loss 0.0184
+Epoch 19: Train Loss 0.0179 | Val Loss 0.0178
+Epoch 20: Train Loss 0.0178 | Val Loss 0.0192
+Epoch 21: Train Loss 0.0178 | Val Loss 0.0174
+Epoch 22: Train Loss 0.0176 | Val Loss 0.0183
+Epoch 23: Train Loss 0.0174 | Val Loss 0.0176
+Epoch 24: Train Loss 0.0178 | Val Loss 0.0169
+  -> New Best Prior Saved!
+Epoch 25: Train Loss 0.0172 | Val Loss 0.0186
+Epoch 26: Train Loss 0.0175 | Val Loss 0.0179
+Epoch 27: Train Loss 0.0170 | Val Loss 0.0173
+Epoch 28: Train Loss 0.0169 | Val Loss 0.0165
+  -> New Best Prior Saved!
+Epoch 29: Train Loss 0.0161 | Val Loss 0.0166
+Epoch 30: Train Loss 0.0168 | Val Loss 0.0173
+Epoch 31: Train Loss 0.0168 | Val Loss 0.0166
+Epoch 32: Train Loss 0.0167 | Val Loss 0.0169
+Epoch 33: Train Loss 0.0163 | Val Loss 0.0166
+Epoch 34: Train Loss 0.0164 | Val Loss 0.0162
+  -> New Best Prior Saved!
+Epoch 35: Train Loss 0.0168 | Val Loss 0.0179
+Epoch 36: Train Loss 0.0168 | Val Loss 0.0167
+Epoch 37: Train Loss 0.0166 | Val Loss 0.0181
+Epoch 38: Train Loss 0.0170 | Val Loss 0.0170
+Epoch 39: Train Loss 0.0169 | Val Loss 0.0173
+Epoch 40: Train Loss 0.0169 | Val Loss 0.0176
+Epoch 41: Train Loss 0.0170 | Val Loss 0.0165
+Epoch 42: Train Loss 0.0169 | Val Loss 0.0178
+Epoch 43: Train Loss 0.0171 | Val Loss 0.0163
+Epoch 44: Train Loss 0.0166 | Val Loss 0.0158
+  -> New Best Prior Saved!
+Epoch 45: Train Loss 0.0167 | Val Loss 0.0162
+Epoch 46: Train Loss 0.0170 | Val Loss 0.0153
+  -> New Best Prior Saved!
+Epoch 47: Train Loss 0.0167 | Val Loss 0.0161
+Epoch 48: Train Loss 0.0164 | Val Loss 0.0157
+Epoch 49: Train Loss 0.0162 | Val Loss 0.0158
+Epoch 50: Train Loss 0.0164 | Val Loss 0.0170
+Epoch 51: Train Loss 0.0163 | Val Loss 0.0170
+Epoch 52: Train Loss 0.0166 | Val Loss 0.0166
+Epoch 53: Train Loss 0.0166 | Val Loss 0.0168
+Epoch 54: Train Loss 0.0167 | Val Loss 0.0175
+Epoch 55: Train Loss 0.0167 | Val Loss 0.0174
+Epoch 56: Train Loss 0.0165 | Val Loss 0.0162
+Epoch 57: Train Loss 0.0171 | Val Loss 0.0158
+Epoch 58: Train Loss 0.0169 | Val Loss 0.0161
+Epoch 59: Train Loss 0.0164 | Val Loss 0.0182
+Epoch 60: Train Loss 0.0168 | Val Loss 0.0168
+Epoch 61: Train Loss 0.0166 | Val Loss 0.0178
+Epoch 62: Train Loss 0.0172 | Val Loss 0.0173
+Epoch 63: Train Loss 0.0169 | Val Loss 0.0167
+Epoch 64: Train Loss 0.0170 | Val Loss 0.0157
+Epoch 65: Train Loss 0.0167 | Val Loss 0.0166
+Epoch 66: Train Loss 0.0170 | Val Loss 0.0169
+Epoch 67: Train Loss 0.0169 | Val Loss 0.0171
+Epoch 68: Train Loss 0.0170 | Val Loss 0.0179
+Epoch 69: Train Loss 0.0166 | Val Loss 0.0154
+Epoch 70: Train Loss 0.0166 | Val Loss 0.0155
+Epoch 71: Train Loss 0.0165 | Val Loss 0.0174
+Epoch 72: Train Loss 0.0167 | Val Loss 0.0163
+Epoch 73: Train Loss 0.0169 | Val Loss 0.0166
+Epoch 74: Train Loss 0.0166 | Val Loss 0.0163
+Epoch 75: Train Loss 0.0170 | Val Loss 0.0163
+Epoch 76: Train Loss 0.0168 | Val Loss 0.0179
+Epoch 77: Train Loss 0.0163 | Val Loss 0.0164
+Epoch 78: Train Loss 0.0166 | Val Loss 0.0165
+Epoch 79: Train Loss 0.0167 | Val Loss 0.0168
+Epoch 80: Train Loss 0.0165 | Val Loss 0.0163
+Epoch 81: Train Loss 0.0169 | Val Loss 0.0158
+Epoch 82: Train Loss 0.0163 | Val Loss 0.0161
+Epoch 83: Train Loss 0.0166 | Val Loss 0.0165
+Epoch 84: Train Loss 0.0165 | Val Loss 0.0163
+Epoch 85: Train Loss 0.0168 | Val Loss 0.0172
+Epoch 86: Train Loss 0.0165 | Val Loss 0.0183
+Epoch 87: Train Loss 0.0168 | Val Loss 0.0160
+Epoch 88: Train Loss 0.0164 | Val Loss 0.0167
+Epoch 89: Train Loss 0.0172 | Val Loss 0.0163
+Epoch 90: Train Loss 0.0167 | Val Loss 0.0162
+Epoch 91: Train Loss 0.0167 | Val Loss 0.0169
+Epoch 92: Train Loss 0.0168 | Val Loss 0.0169
+Epoch 93: Train Loss 0.0166 | Val Loss 0.0168
+Epoch 94: Train Loss 0.0169 | Val Loss 0.0170
+Epoch 95: Train Loss 0.0164 | Val Loss 0.0168
+Epoch 96: Train Loss 0.0170 | Val Loss 0.0164
+Epoch 97: Train Loss 0.0167 | Val Loss 0.0159
+Epoch 98: Train Loss 0.0163 | Val Loss 0.0156
+Epoch 99: Train Loss 0.0170 | Val Loss 0.0163
+Epoch 100: Train Loss 0.0170 | Val Loss 0.0169
+Saved Best Prior Model to checkpoints/nvae_CelebA_imm_newcrop_stage2.pth
+
+done. checkpoint: checkpoints/nvae_CelebA_imm_newcrop_stage2.pth

@@ -1,0 +1,20 @@
+Backbone,Prior,NFE,FID_std,Variant
+ldm_ae_CelebA,imm conv prior,1,7.84,
+ldm_ae_CelebA,imm conv prior,2,6.545,
+ldm_ae_CelebA,imm conv prior,4,6.492,
+ldm_ae_CelebA,imm conv prior,8,6.626,
+ldm_ae_CelebA,imm conv prior,16,6.769,
+ldm_ae_CelebA,meanflow conv prior,1,13.442,w192b6
+ldm_ae_CelebA,meanflow conv prior,2,12.588,w192b6
+ldm_ae_CelebA,meanflow conv prior,4,14.128,w192b6
+ldm_ae_CelebA,meanflow conv prior,8,14.96,w192b6
+ldm_ae_CelebA,imm conv prior,1,14.662,w192b6_sigma
+ldm_ae_CelebA,imm conv prior,2,14.377,w192b6_sigma
+ldm_ae_CelebA,imm conv prior,4,14.28,w192b6_sigma
+ldm_ae_CelebA,imm conv prior,8,14.024,w192b6_sigma
+ldm_ae_CelebA,imm conv prior,16,13.935,w192b6_sigma
+ldm_ae_CelebA,imm conv prior,1,7.475,w192b6
+ldm_ae_CelebA,imm conv prior,2,6.404,w192b6
+ldm_ae_CelebA,imm conv prior,4,6.253,w192b6
+ldm_ae_CelebA,imm conv prior,8,6.356,w192b6
+ldm_ae_CelebA,imm conv prior,16,6.492,w192b6
