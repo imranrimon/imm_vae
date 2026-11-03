@@ -1,0 +1,8 @@
+{
+  "best": {
+    "p_ratio": 0.5,
+    "p_boundary": 0.25,
+    "adaptive_p": 0.5
+  },
+  "note": "sweep cut short after 3/4 configs; config2 won decisively (mmd 0.00093 vs 0.0206 / 0.0204)"
+}
