@@ -1,0 +1,33 @@
+Backbone,Prior,NFE,Variant,FID_std
+temp_sens,NVAE ancestral t=0.6,0,32px,44.131
+temp_sens,NVAE ancestral t=0.7,0,32px,44.3
+temp_sens,NVAE ancestral t=0.8,0,32px,47.765
+temp_sens,NVAE ancestral t=0.9,0,32px,55.324
+temp_sens,NVAE ancestral t=1.0,0,32px,67.278
+temp_sens,NVAE + sched p=0.3 t=0.6,0,32px,46.611
+temp_sens,NVAE + sched p=0.3 t=0.7,0,32px,43.813
+temp_sens,NVAE + sched p=0.3 t=0.8,0,32px,41.921
+temp_sens,NVAE + sched p=0.3 t=0.9,0,32px,40.876
+temp_sens,NVAE + sched p=0.3 t=1.0,0,32px,41.146
+temp_sens,adversarial AE t=0.6,0,32px,121.135
+temp_sens,adversarial AE t=0.7,0,32px,146.427
+temp_sens,adversarial AE t=0.8,0,32px,178.037
+temp_sens,adversarial AE t=0.9,0,32px,209.092
+temp_sens,adversarial AE t=1.0,0,32px,234.618
+temp_sens,adversarial AE t=1.1,0,32px,253.878
+temp_sens,adversarial AE t=1.2,0,32px,267.632
+temp_sens,sigma-VAE t=0.6,0,32px,57.443
+temp_sens,sigma-VAE t=0.7,0,32px,58.091
+temp_sens,sigma-VAE t=0.8,0,32px,67.736
+temp_sens,sigma-VAE t=0.9,0,32px,85.543
+temp_sens,sigma-VAE t=1.0,0,32px,109.491
+temp_sens,sigma-VAE t=1.1,0,32px,136.642
+temp_sens,sigma-VAE t=1.2,0,32px,163.529
+temp_sens,NVAE ancestral t=0.4,0,32px,51.973
+temp_sens,NVAE ancestral t=0.5,0,32px,46.99
+temp_sens,NVAE + sched p=0.3 t=0.4,0,32px,56.696
+temp_sens,NVAE + sched p=0.3 t=0.5,0,32px,50.444
+temp_sens,adversarial AE t=0.4,0,32px,116.124
+temp_sens,adversarial AE t=0.5,0,32px,109.304
+temp_sens,sigma-VAE t=0.4,0,32px,85.949
+temp_sens,sigma-VAE t=0.5,0,32px,66.433

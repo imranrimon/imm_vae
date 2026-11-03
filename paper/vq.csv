@@ -1,0 +1,25 @@
+Backbone,Prior,NFE,Variant,FID_std
+vq_ae,TRUE codes [ceiling],0,c1024,4.542
+vq_ae,independent marginal codes,0,c1024,122.241
+vq_ae,TRUE codes [ceiling],0,c1024-ema,3.478
+vq_ae,independent marginal codes,0,c1024-ema,244.735
+vq_ae,TRUE codes [ceiling],0,c1024-ema_d512l12,3.478
+vq_ae,independent marginal codes,0,c1024-ema_d512l12,244.735
+vq_ae,TRUE codes [ceiling],0,c1024-ema_d512l12-n10000,4.487
+vq_ae,independent marginal codes,0,c1024-ema_d512l12-n10000,244.836
+vq_ae,AR transformer T=0.8 top_k=50,64,c1024-ema_d512l12-n10000,17.291
+vq_ae,AR transformer T=1.0 top_k=off,64,c1024-ema_d512l12-n10000,7.328
+vq_ae,AR transformer T=0.9 top_k=off,64,c1024-ema_d512l12-n10000,7.407
+vq_ae,AR transformer T=1.0 top_k=100,64,c1024-ema_d512l12-n10000,13.907
+vq_ae,AR transformer T=0.9 top_k=100,64,c1024-ema_d512l12-n10000,14.474
+vq_ae,TRUE codes [ceiling],0,c1024-loss-n10000,5.604
+vq_ae,independent marginal codes,0,c1024-loss-n10000,122.842
+vq_ae,AR transformer T=1.0 top_k=off,64,c1024-loss-n10000,236.681
+vq_ae,AR transformer T=0.9 top_k=off,64,c1024-loss-n10000,236.631
+vq_ae,AR transformer T=1.0 top_k=100,64,c1024-loss-n10000,238.133
+vq_ae,AR transformer T=0.9 top_k=100,64,c1024-loss-n10000,237.563
+vq_ae,AR transformer T=0.8 top_k=50,64,c1024-loss-n10000,236.032
+vq_ae,AR transformer T=1.0 top_k=off,64,c1024-ema_d512l12,6.571
+vq_ae,TRUE codes [ceiling],0,c256-ema_d512l12,3.897
+vq_ae,independent marginal codes,0,c256-ema_d512l12,177.55
+vq_ae,AR transformer T=1.0 top_k=off,64,c256-ema_d512l12,6.149

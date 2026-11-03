@@ -1,0 +1,10 @@
+Stack,Prior,NFE,sample_ms,decode_ms,total_ms
+adversarial AE,IMM conv,1,26.6,65.4,92.0
+adversarial AE,IMM conv,2,55.2,65.4,120.6
+adversarial AE,IMM conv,4,109.2,65.4,174.6
+adversarial AE,IMM conv,8,222.7,65.4,288.0
+adversarial AE,IMM conv,16,445.5,65.4,510.8
+adversarial AE,full-cov Gaussian,0,0.4,65.4,65.8
+MSE NVAE,latent DDPM (MLP),100,681.7,10.6,692.3
+MSE NVAE,latent DDPM (MLP),1000,6053.1,10.6,6063.7
+MSE NVAE,IMM-legacy (MLP),16,98.9,10.6,109.6

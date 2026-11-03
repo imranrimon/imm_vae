@@ -1,0 +1,15 @@
+Backbone,Prior,NFE,FID_std,Variant
+ldm_ae_LSUN,imm conv prior,1,24.831,
+ldm_ae_LSUN,imm conv prior,2,23.132,
+ldm_ae_LSUN,imm conv prior,4,22.819,
+ldm_ae_LSUN,imm conv prior,8,23.201,
+ldm_ae_LSUN,imm conv prior,16,23.56,
+ldm_ae_LSUN,meanflow conv prior,1,33.741,w192b6
+ldm_ae_LSUN,meanflow conv prior,2,33.714,w192b6
+ldm_ae_LSUN,meanflow conv prior,4,35.38,w192b6
+ldm_ae_LSUN,meanflow conv prior,8,36.364,w192b6
+ldm_ae_LSUN,imm conv prior,1,24.831,w192b6
+ldm_ae_LSUN,imm conv prior,2,23.132,w192b6
+ldm_ae_LSUN,imm conv prior,4,22.819,w192b6
+ldm_ae_LSUN,imm conv prior,8,23.201,w192b6
+ldm_ae_LSUN,imm conv prior,16,23.56,w192b6
