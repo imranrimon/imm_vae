@@ -8,6 +8,7 @@ from src.models.nvae import NVAE
 from src.models.diffusion import DDPM, ResidualDenoiser
 # Import IMM Core
 from src.models.imm_core import IMM, OTFMSchedule, OtFmEulerFmParameterization
+from src.models.meanflow import MeanFlow, MeanFlowNet
 
 def compute_kernel(x, y):
     x_size, y_size, dim = x.size(0), y.size(0), x.size(1)
@@ -31,7 +32,8 @@ def train_stage2(args, device):
     # Let's assume user wants to train Prior on the 'kl' base by default unless logic changes
     # Determine which base model to load
     base_method = args.base_method
-    base_ckpt = f"checkpoints/{args.model}_{args.dataset}_{base_method}_stage1.pth"
+    rt = getattr(args, 'run_tag', '') or ''
+    base_ckpt = f"checkpoints/{args.model}_{args.dataset}_{base_method}{rt}_stage1.pth"
     
     if args.model == 'vae':
         base_model = VAE(latent_dim=args.z_dim).to(device)
@@ -47,7 +49,7 @@ def train_stage2(args, device):
     for p in base_model.parameters(): p.requires_grad = False
     
     # 2. Setup Prior Model
-    save_path = f"checkpoints/{args.model}_{args.dataset}_{args.method}_stage2.pth"
+    save_path = f"checkpoints/{args.model}_{args.dataset}_{args.method}{rt}_stage2.pth"
     
     # Loaders needed for sigma calc
     # IMM requires batch size divisible by M (16)
@@ -55,15 +57,10 @@ def train_stage2(args, device):
     loader = get_dataloader(args.dataset, batch_size=128, drop_last=use_drop_last)
     val_loader = get_dataloader(args.dataset, batch_size=128, split='test', drop_last=use_drop_last)
 
-    if args.method == 'ddpm':
-        denoiser = ResidualDenoiser(input_dim=args.z_dim + 64, model_dim=512, output_dim=args.z_dim, n_blocks=6)
-        prior_model = DDPM(denoiser, z_dim=args.z_dim, n_steps=1000, device=device).to(device)
-    elif args.method == 'imm':
-        # Calculate actual sigma_data from base model
-        # Calculate actual sigma_data from base model using multiple batches
+    def _latent_stats():
         print("Calculating robust global latent statistics from base model...")
         z_samples = []
-        max_batches = 50 
+        max_batches = 50
         for i, (xb, _) in enumerate(loader):
             if i >= max_batches: break
             xb = xb.to(device)
@@ -76,12 +73,29 @@ def train_stage2(args, device):
                      std_g = torch.exp(0.5 * log_g)
                      z = mu_g + torch.randn_like(mu_g) * std_g
                 z_samples.append(z)
-        
         z_all = torch.cat(z_samples, dim=0)
-        norm_mean = z_all.mean(dim=0).detach()
-        norm_std = z_all.std(dim=0).detach()
-        print(f"  -> Calculated Global Mean: {norm_mean.mean():.4f}, Global Std: {norm_std.mean():.4f}")
-        print(f"  -> Std Range: [{norm_std.min():.4f}, {norm_std.max():.4f}]")
+        m = z_all.mean(dim=0).detach()
+        sd = z_all.std(dim=0).detach()
+        print(f"  -> Calculated Global Mean: {m.mean():.4f}, Global Std: {sd.mean():.4f}")
+        print(f"  -> Std Range: [{sd.min():.4f}, {sd.max():.4f}]")
+        return m, sd
+
+    if args.method == 'ddpm':
+        denoiser = ResidualDenoiser(input_dim=args.z_dim + 64, model_dim=512, output_dim=args.z_dim, n_blocks=6)
+        prior_model = DDPM(denoiser, z_dim=args.z_dim, n_steps=1000, device=device).to(device)
+    elif args.method in ('meanflow', 'meanflow_improved'):
+        norm_mean, norm_std = _latent_stats()
+        net = MeanFlowNet(z_dim=args.z_dim, model_dim=512, n_blocks=6)
+        prior_model = MeanFlow(
+            net,
+            D=args.z_dim,
+            variant='base' if args.method == 'meanflow' else 'improved',
+            data_mean=norm_mean,
+            data_std=norm_std,
+            jvp_free=getattr(args, 'jvp_free', False),
+        ).to(device)
+    elif args.method == 'imm':
+        norm_mean, norm_std = _latent_stats()
 
         # IMM Setup
         denoiser = ResidualDenoiser(input_dim=args.z_dim + 2, model_dim=512, output_dim=args.z_dim, n_blocks=6)
@@ -94,9 +108,14 @@ def train_stage2(args, device):
 
     if args.method == 'imm':
         # Match notebook learning rate for IMM
-        optimizer = torch.optim.Adam(prior_model.parameters(), lr=1e-5)
+        default_lr = 1e-5
+    elif args.method in ('meanflow', 'meanflow_improved'):
+        default_lr = 1e-4
     else:
-        optimizer = torch.optim.Adam(prior_model.parameters(), lr=args.lr)
+        default_lr = 1e-4
+    lr = getattr(args, 'lr', None) or default_lr
+    print(f"Stage 2 optimizer: Adam(lr={lr})")
+    optimizer = torch.optim.Adam(prior_model.parameters(), lr=lr)
     
     best_loss = float('inf')
     last_save_path = save_path.replace(".pth", "_last.pth")
@@ -117,7 +136,9 @@ def train_stage2(args, device):
                     std_g = torch.exp(0.5 * log_g)
                     z = mu_g + torch.randn_like(mu_g) * std_g
             
-            if args.method == 'imm':
+            if args.method in ('meanflow', 'meanflow_improved'):
+                loss = prior_model.compute_loss(z)
+            elif args.method == 'imm':
                 # Joint Training Logic: Score Matching + MMD
                 imm_loss = prior_model.compute_loss(z)
                 

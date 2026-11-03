@@ -1,4 +1,38 @@
+"""IMM latent prior.
 
+KNOWN CONVENTION DEFECT -- read before trusting Stage 2 IMM numbers.
+
+compute_loss interpolates as
+
+    x_t = t * x + (1 - t) * z_prior          (t = 1 -> DATA, t = 0 -> NOISE)
+
+i.e. the time axis is inverted relative to standard OT-FM / IMM, where t = 1 is
+noise. But it also draws s ~ U(tmin, t), so s < t, which was copied from the
+standard convention where s < t means "s is closer to the data". Under the
+inverted axis used here, s < t means s is closer to the NOISE, so
+f(x_t, s, t) is trained as a *noising* map, not a generative one.
+
+Consequences:
+  * Sampling on a descending grid (t: 1 -> tmin) runs the map in the direction
+    it was trained, which walks toward noise, not data.
+  * The original evaluation used an ASCENDING grid, which is out of the training
+    domain but flips the sign of c_out = -(t - s) and therefore partially
+    inverts the map. That is why the ascending ("legacy") sampler empirically
+    scores better than the in-domain descending one on these checkpoints.
+
+Two further inconsistencies follow from the same root cause:
+  * OTFMSchedule.alpha(t) returns 1, but the interpolation above puts a
+    coefficient of t on the data, so alpha_eff(t) = t. Everything derived from
+    alpha -- c_in, lamb, lamb_diff, _weight_fn, _ddim -- is computed for a
+    forward process that is not the one being used.
+  * lamb(t) = -2 log(1 - t) therefore reports maximal SNR at t -> 1 and
+    logSNR = 0 at t = 0, where the true SNR is zero.
+
+Fixing this properly means flipping the interpolation to x_t = (1 - t) x + t eps
+(and re-deriving alpha/sigma/eta accordingly), then RETRAINING. It cannot be
+repaired at sampling time. See src/models/meanflow.py for a prior written with
+the standard convention from the start.
+"""
 import torch
 import torch.nn as nn
 import math
@@ -78,6 +112,55 @@ class OtFmEulerFmParameterization(IMMParameterization):
     def c_out(self, s: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         return -(t - s) * self.sigma_data
 
+class OTFMScheduleFixed(IMMSchedule):
+    """Standard OT-FM: x_t = (1-t) x + t eps.  t = 0 -> DATA, t = 1 -> NOISE.
+
+    This is the corrected counterpart of OTFMSchedule, whose time axis is
+    inverted (see the module docstring). Here alpha and sigma genuinely describe
+    the interpolation used by compute_loss, so everything derived from them
+    (c_in, lamb, lamb_diff, the loss weighting) is self-consistent, and s < t
+    correctly means "s is closer to the data".
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.tmin = 1e-3
+        self.tmax = 1.0 - 1e-3
+
+    def alpha(self, t):
+        return 1.0 - t
+
+    def sigma(self, t):
+        return t
+
+    def lamb(self, t):
+        # logSNR = 2 log(alpha/sigma); decreasing in t (t=1 is noise)
+        return 2.0 * (torch.log(1.0 - t) - torch.log(t))
+
+    def lamb_diff(self, t):
+        # d lamb / dt = -2 / (t (1-t))  -- negative, SNR falls as t rises
+        return -2.0 / (t * (1.0 - t))
+
+    def eta(self, t):
+        # monotone increasing in noise level; eta = -lamb/2
+        return torch.log(t) - torch.log(1.0 - t)
+
+    def eta_inv(self, val):
+        return torch.sigmoid(val)
+
+
+class OtFmEulerFmParameterizationFixed(IMMParameterization):
+    def __init__(self, sigma_data: float):
+        super().__init__(sigma_data, OTFMScheduleFixed())
+
+    def c_skip(self, s, t):
+        return torch.ones_like(s)
+
+    def c_out(self, s, t):
+        # x_s = x_t - (t - s) * v, with t > s (t noisier). Matches flow matching.
+        return -(t - s) * self.sigma_data
+
+
 # ────────────────────────────────────────────────────────────────
 # Residual Denoiser 
 # ────────────────────────────────────────────────────────────────
@@ -140,8 +223,11 @@ class IMM(nn.Module):
                  M: int = 16,
                  D: int = 2,
                  data_mean = None,
-                 data_std = None):
+                 data_std = None,
+                 convention: str = 'legacy'):
         super().__init__()
+        assert convention in ('legacy', 'fixed'), convention
+        self.convention = convention
         self.network = network
         self.parameterization = parameterization
         self.schedule = parameterization.schedule
@@ -210,7 +296,9 @@ class IMM(nn.Module):
         # Previous code had * (-dlogSNR_t), making weights negative.
         # We need positive weights for minimization.
         dlogSNR_t = self.schedule.lamb_diff(t).view(-1)
-        coef = 0.5 * torch.sigmoid(self.b - logSNR_t) * (dlogSNR_t)
+        # magnitude only: the corrected schedule has dlogSNR/dt < 0, and a
+        # negative weight would turn the objective into a maximisation.
+        coef = 0.5 * torch.sigmoid(self.b - logSNR_t) * dlogSNR_t.abs()
         denom = a_t.pow(2) + sig_t.pow(2)
         num = a_t.pow(self.a)
         return coef * num / denom
@@ -240,10 +328,16 @@ class IMM(nn.Module):
         s = s_single.repeat_interleave(M, dim=0)
         r = self._map_fn(s, t)
         
-        # Explicit OT-FM Interpolation (Stable)
-        # x_t = t * x + (1 - t) * z_prior
-        x_t = t * x + (1.0 - t) * z_prior
-        x_r = r * x + (1.0 - r) * z_prior
+        # Interpolation. 'legacy' keeps the inverted axis (t=1 -> data) that the
+        # existing checkpoints were trained under; 'fixed' uses standard OT-FM
+        # (t=1 -> noise), which makes s < t mean "s is closer to the data" and
+        # turns f(x_t, s, t) into a generative map instead of a noising one.
+        if self.convention == 'fixed':
+            x_t = (1.0 - t) * x + t * z_prior
+            x_r = (1.0 - r) * x + r * z_prior
+        else:
+            x_t = t * x + (1.0 - t) * z_prior
+            x_r = r * x + (1.0 - r) * z_prior
         
         f_x_t = self.forward(x_t, s, t)
         f_x_r = self.forward(x_r, s, r).detach()
@@ -269,18 +363,41 @@ class IMM(nn.Module):
         loss = torch.mean(joint * weights)
         return loss
         
+    def sampling_times(self, steps: int, device=None) -> torch.Tensor:
+        """Descending time grid matching the training domain (s < t).
+
+        compute_loss only ever draws s ~ U(tmin, t), so the network is trained
+        exclusively for s < t. Sampling must therefore walk t downward.
+        `steps` transitions require `steps + 1` grid points.
+
+        NOTE: this makes the sampler consistent with the training domain, but
+        because the time axis itself is inverted (see the module docstring) that
+        direction walks toward noise. On checkpoints trained with the current
+        compute_loss this scores WORSE than the original ascending grid. The
+        real fix is to correct the convention and retrain.
+        """
+        if self.convention == 'fixed':
+            # t = 1 is noise, t = 0 is data: walk t downward to generate.
+            return torch.linspace(self.schedule.tmax, self.schedule.tmin,
+                                  steps + 1, device=device)
+        return torch.linspace(1.0, self.schedule.tmin, steps + 1, device=device)
+
     def sample(self, n_samples: int, times: torch.Tensor) -> torch.Tensor:
         device = next(self.parameters()).device
+        times = times.to(device)
+        if times[0] < times[-1]:
+            raise ValueError(
+                "IMM.sample expects a descending time grid (t > s at every step); "
+                "got an ascending one. Use IMM.sampling_times(steps)."
+            )
         x = self.parameterization.sigma_data * torch.randn((n_samples, self.D), device=device)
         for i in range(len(times) - 1):
             t_val = times[i]
-            s_val = times[i+1]
+            s_val = times[i + 1]
             t_tensor = torch.full((n_samples, 1), t_val, device=device)
             s_tensor = torch.full((n_samples, 1), s_val, device=device)
             x = self.forward(x, s_tensor, t_tensor)
-            s_tensor = torch.full((n_samples, 1), s_val, device=device)
-            x = self.forward(x, s_tensor, t_tensor)
-            
+
         # Denormalize Data back to Original Space
         x = x * self.data_std + self.data_mean
         return x

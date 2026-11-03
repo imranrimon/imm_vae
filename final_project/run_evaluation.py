@@ -264,7 +264,8 @@ def generate_batched(n_samples, batch_size, z_dim, model_type, base_model, prior
     # Pre-calc times for IMM if needed
     imm_times = None
     if prior_method == 'imm' and steps is not None:
-         imm_times = torch.linspace(0, 1, steps+1).to(DEVICE)
+         # Descending grid: the network is only trained for s < t.
+         imm_times = prior_model.sampling_times(steps, device=DEVICE)
          
     with torch.no_grad():
         for i in range(num_batches):
@@ -379,7 +380,7 @@ def evaluate_all(model_type='vae', dataset_name='CIFAR10', z_dim=64, num_samples
         # t-SNE Comparison (Use fewer steps like 10 for quick visualization?)
         # Or maybe the best one (64)? Let's use 32 as balanced.
         print("Generating IMM t-SNE comparison...")
-        times = torch.linspace(0, 1, 33).to(DEVICE)
+        times = imm.sampling_times(32, device=DEVICE)
         z_tsne = imm.sample(n_samples=500, times=times).detach().cpu().numpy()
         tsne_path = os.path.join(out_dir, f"tsne_{model_type}_imm_vs_real.png")
         generate_tsne_comparison(real_z_ref, z_tsne, f"IMM Generated vs Real Latents", tsne_path)

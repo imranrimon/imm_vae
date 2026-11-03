@@ -1,7 +1,5 @@
  
 import torch 
-import math
-import torch.nn.functional as F 
 from torch_utils import persistence 
 
 from einops import rearrange, einsum
@@ -307,90 +305,7 @@ class IMMLoss:
  
         logs["ts"] = t[:, 0].flatten()  
                    
-
-@persistence.persistent_class
-class KLLoss:
-    def __init__(self, kl_weight=1.0, **kwargs):
-        self.kl_weight = kl_weight
-
-    def __call__(self, mean, logvar, **kwargs):
-        # KL Divergence: -0.5 * sum(1 + logvar - mean^2 - exp(logvar))
-        # Sum over latent dim, mean over batch
-        kl_loss = -0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp(), dim=1)
-        return self.kl_weight * kl_loss.mean(), {}
-
-@persistence.persistent_class
-class MMDLoss:
-    def __init__(self, kernel_type='rbf', mmd_weight=1.0, **kwargs):
-        self.kernel_type = kernel_type
-        self.mmd_weight = mmd_weight
-
-    def compute_kernel(self, x, y):
-        x_size = x.size(0)
-        y_size = y.size(0)
-        dim = x.size(1)
-        x = x.view(x_size, dim)
-        y = y.view(y_size, dim)
-        
-        tiled_x = x.unsqueeze(1).expand(x_size, y_size, dim)
-        tiled_y = y.unsqueeze(0).expand(x_size, y_size, dim)
-        
-        # Fix: mean(2) already divides by dim. No need to divide again.
-        # Previously: (tiled_x - tiled_y).pow(2).mean(2) / float(dim)
-        # With mean(2), expectation is ~2.0 for N(0,1), so exp(-2) ~ 0.135 (Good range).
-        kernel_input = (tiled_x - tiled_y).pow(2).mean(2)
-        return torch.exp(-kernel_input) # RBF kernel
-
-    def __call__(self, z, **kwargs):
-        # Sample from prior N(0, I)
-        z_prior = torch.randn_like(z)
-        
-        k_zz = self.compute_kernel(z, z)
-        k_pp = self.compute_kernel(z_prior, z_prior)
-        k_zp = self.compute_kernel(z, z_prior)
-        
-        mmd = k_zz.mean() + k_pp.mean() - 2 * k_zp.mean()
-        return self.mmd_weight * mmd, {'mmd': mmd.detach()}
-
-@persistence.persistent_class
-class DDPMLoss:
-    def __init__(self, noise_schedule="cosine", **kwargs):
-        self.noise_schedule = noise_schedule
-
-    def get_alpha_bar(self, t):
-        # Cosine schedule
-        s = 0.008
-        f = torch.cos(((t + s) / (1 + s)) * math.pi / 2) ** 2
-        f_0 = math.cos(s / (1 + s) * math.pi / 2) ** 2
-        return f / f_0
-
-    def __call__(self, net, images, labels=None, augment_pipe=None, device=None, **kwargs):
-        # images are latents x_0
-        # images are latents x_0. Shape [B, D] or [B, C, H, W]
-        x_0 = images
-        if x_0.dim() == 2:
-            b, d = x_0.shape
-            view_shape = (b, 1)
-        else:
-             b, c, h, w = x_0.shape
-             view_shape = (b, 1, 1, 1)
-             
-        t = torch.rand((b,), device=device)
-        
-        # Add noise
-        noise = torch.randn_like(x_0)
-        alpha_bar = self.get_alpha_bar(t).view(*view_shape).to(device)
-        
-        x_t = torch.sqrt(alpha_bar) * x_0 + torch.sqrt(1 - alpha_bar) * noise
-        
-        # Predict noise
-        # Pass t, and s=t (dummy)
-        pred_noise = net(x_t, t, s=t, class_labels=labels)
-        
-        # Simple MSE on noise
-        loss = F.mse_loss(pred_noise, noise)
-        return loss, {'ddpm_mse': loss.detach()} 
-
+        return loss, logs
 
 
 

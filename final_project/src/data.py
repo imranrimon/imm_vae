@@ -5,22 +5,38 @@ from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms, datasets
 from PIL import Image
 
+# Repo root is two levels up from final_project/src/data.py
+DEFAULT_DATA_ROOT = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'data'
+)
+
 class FlatImageFolder(Dataset):
-    def __init__(self, root, transform=None):
+    """Flat image directory with a deterministic train/test split.
+
+    FFHQ ships no split, and this class previously returned every image for both
+    'train' and 'test', so validation metrics and the FID reference overlapped
+    the training set. We use FFHQ's own convention: the first 60k images are
+    train, the last 10k are held out.
+    """
+
+    def __init__(self, root, transform=None, split=None, n_holdout=10000):
         self.root = root
         self.transform = transform
         if not os.path.exists(root):
             print(f"Warning: Root {root} does not exist.")
             self.files = []
             return
-             
+
         self.files = []
         for dirpath, _, filenames in os.walk(root):
             for f in filenames:
                 if f.lower().endswith(('.png', '.jpg', '.jpeg')):
                     self.files.append(os.path.join(dirpath, f))
-        
+
         self.files.sort()
+        if split is not None and len(self.files) > n_holdout:
+            self.files = (self.files[:-n_holdout] if split == 'train'
+                          else self.files[-n_holdout:])
 
     def __len__(self):
         return len(self.files)
@@ -37,19 +53,25 @@ class FlatImageFolder(Dataset):
             img = self.transform(img)
         return img, 0
 
-def get_dataloader(dataset_name, batch_size=128, image_size=32, split='train', root='E:/imm_vae/data', drop_last=None):
+def get_dataloader(dataset_name, batch_size=128, image_size=32, split='train', root=None, drop_last=None):
     """
     Unified Data Loader Factory.
     Args:
         dataset_name (str): 'CelebA', 'CIFAR10', 'FFHQ'
         split (str): 'train' or 'test'
     """
+    if root is None:
+        root = os.environ.get('IMM_VAE_DATA', DEFAULT_DATA_ROOT)
+
     
     if dataset_name == 'CelebA':
         # CelebA standard transform
+        # Crop the aligned frame FIRST, then resize. The original did
+        # Resize((s,s)) then CenterCrop(s), which makes the crop a no-op and
+        # squashes the 178x218 frame to square.
         transform = transforms.Compose([
+            transforms.CenterCrop(148),
             transforms.Resize((image_size, image_size)),
-            transforms.CenterCrop(image_size),
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ])
@@ -72,12 +94,12 @@ def get_dataloader(dataset_name, batch_size=128, image_size=32, split='train', r
         # FFHQ usually simple folder structure
         transform = transforms.Compose([
             transforms.Resize((image_size, image_size)),
-            transforms.CenterCrop(image_size),
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ])
         # FFHQ doesn't have standard splits in simple folder, we might just use same folder
-        dset = FlatImageFolder(root=os.path.join(root, 'FFHQ'), transform=transform)
+        dset = FlatImageFolder(root=os.path.join(root, 'FFHQ'), transform=transform,
+                               split=('train' if split == 'train' else 'test'))
         
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")

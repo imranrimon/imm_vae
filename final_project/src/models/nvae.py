@@ -45,9 +45,13 @@ class UNetUpBlock(nn.Module):
         return self.norm(h)
 
 class HierarchicalEncoder(nn.Module):
-    def __init__(self, in_channels=3, base_channels=64, z_dim=128, input_res=64):
+    def __init__(self, in_channels=3, base_channels=64, z_dim=128, input_res=64,
+                 z_fine_ch=None):
         super().__init__()
         self.input_res = input_res
+        # z_fine_ch=None reproduces the original over-complete 8x8x(2*base) code.
+        z_fine_ch = base_channels * 2 if z_fine_ch is None else z_fine_ch
+        self.z_fine_ch = z_fine_ch
         
         self.conv_in = nn.Conv2d(in_channels, base_channels, 3, 1, 1)
         
@@ -77,7 +81,7 @@ class HierarchicalEncoder(nn.Module):
         # Let's use h2 (8x8) for fine stats
         self.to_fine_stats = nn.Sequential(
              nn.Conv2d(base_channels*2, base_channels*2, 3, 1, 1),
-             nn.Conv2d(base_channels*2, base_channels*2 * 2, 1) 
+             nn.Conv2d(base_channels*2, z_fine_ch * 2, 1)
         )
 
     def forward(self, x):
@@ -101,9 +105,12 @@ class HierarchicalEncoder(nn.Module):
 
 
 class HierarchicalDecoder(nn.Module):
-    def __init__(self, out_channels=3, base_channels=64, z_dim=128, input_res=64):
+    def __init__(self, out_channels=3, base_channels=64, z_dim=128, input_res=64,
+                 z_fine_ch=None):
         super().__init__()
         
+        z_fine_ch = base_channels * 2 if z_fine_ch is None else z_fine_ch
+        self.z_fine_ch = z_fine_ch
         final_res = 2
         self.spatial_dim = final_res
         self.base_channels = base_channels
@@ -121,11 +128,11 @@ class HierarchicalDecoder(nn.Module):
         # Prior p(z_fine | z_global features) at 8x8
         self.prior_fine_stats = nn.Sequential(
             nn.Conv2d(base_channels*2, base_channels*2, 3, 1, 1),
-            nn.Conv2d(base_channels*2, base_channels*2 * 2, 1)
+            nn.Conv2d(base_channels*2, z_fine_ch * 2, 1)
         )
         
-        # 8 -> 16 (Combined features)
-        self.up2 = UNetUpBlock(base_channels*4, base_channels, up=True) 
+        # 8 -> 16 (Combined features: h_coarse [base*2] + z_fine [z_fine_ch])
+        self.up2 = UNetUpBlock(base_channels*2 + z_fine_ch, base_channels, up=True) 
         # 16 -> 32
         self.up1 = UNetUpBlock(base_channels, base_channels, up=True)
         
@@ -162,11 +169,19 @@ class HierarchicalDecoder(nn.Module):
         return out, mu_prior, logvar_prior
 
 class NVAE(nn.Module):
-    def __init__(self, z_dim=128, input_res=32):
+    def __init__(self, z_dim=128, input_res=32, z_fine_ch=None):
         super().__init__()
         self.z_dim = z_dim
-        self.encoder = HierarchicalEncoder(z_dim=z_dim, input_res=input_res)
-        self.decoder = HierarchicalDecoder(z_dim=z_dim, input_res=input_res)
+        self.z_fine_ch = 128 if z_fine_ch is None else z_fine_ch
+        self.encoder = HierarchicalEncoder(z_dim=z_dim, input_res=input_res,
+                                           z_fine_ch=z_fine_ch)
+        self.decoder = HierarchicalDecoder(z_dim=z_dim, input_res=input_res,
+                                           z_fine_ch=z_fine_ch)
+
+    def latent_dims(self, res=32):
+        """(global dims, fine dims) -- fine is at res/4 spatially."""
+        sp = res // 4
+        return self.z_dim, self.z_fine_ch * sp * sp
     
     def forward(self, x):
         # 1. Encode

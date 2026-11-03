@@ -11,6 +11,28 @@ def loss_vae_kl(recon, x, mu, logvar, kl_weight=0.00025):
     kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp()) / x.shape[0]
     return recon_loss + kl_weight * kl_loss
 
+def kl_std_normal_perdim(mu, logvar):
+    """KL(q||N(0,I)) averaged over batch, kept per-dimension."""
+    return (-0.5 * (1 + logvar - mu.pow(2) - logvar.exp())).mean(dim=0)
+
+
+def kl_general_perdim(mu_q, logvar_q, mu_p, logvar_p):
+    """KL(q||p) for diagonal Gaussians, averaged over batch, per-dimension."""
+    kl = 0.5 * (logvar_p - logvar_q - 1
+                + (logvar_q.exp() + (mu_q - mu_p).pow(2)) / logvar_p.exp())
+    return kl.mean(dim=0)
+
+
+def apply_free_bits(kl_perdim, free_bits):
+    """Sum per-dim KL, but do not push any dimension below `free_bits` nats.
+
+    Without this, raising the KL weight enough to actually regularize a small
+    z_fine collapses it instead."""
+    if free_bits and free_bits > 0:
+        kl_perdim = torch.clamp(kl_perdim, min=free_bits)
+    return kl_perdim.sum()
+
+
 def loss_kl_general(mu_q, logvar_q, mu_p, logvar_p):
     # KL(N(mu_q, var_q) || N(mu_p, var_p))
     # logvar is log(sigma^2)
@@ -50,7 +72,11 @@ def train_stage1(args, device):
     if args.model == 'vae':
         model = VAE(latent_dim=args.z_dim).to(device)
     elif args.model == 'nvae':
-        model = NVAE(z_dim=args.z_dim).to(device)
+        model = NVAE(z_dim=args.z_dim,
+                     z_fine_ch=getattr(args, 'z_fine_ch', None)).to(device)
+        g, f = model.latent_dims(32)
+        print(f"NVAE latents: z_global={g}, z_fine={f}, total={g+f} "
+              f"({(g+f)/3072:.2f}x the 32x32x3 image)")
     else:
         raise ValueError(f"Unknown model {args.model}")
 
@@ -60,9 +86,17 @@ def train_stage1(args, device):
     
     # KL Weight Config
     kl_w = args.kl_weight if args.kl_weight is not None else 0.00025
-    print(f"Using KL Weight: {kl_w}")
+    free_bits = getattr(args, 'free_bits', 0.0)
+    warmup = getattr(args, 'kl_warmup', 0)
+    print(f"Using KL Weight: {kl_w} | free_bits={free_bits} | kl_warmup={warmup} epochs")
     
-    save_path = f"checkpoints/{args.model}_{args.dataset}_{args.method}_stage1.pth"
+    suffix = ''
+    if args.model == 'nvae' and getattr(args, 'z_fine_ch', None) is not None:
+        suffix = f"_fine{args.z_fine_ch}"
+    # A run tag keeps two models that differ only in their DATA from colliding on
+    # one filename -- the CelebA crop correction produced exactly that clash.
+    suffix += getattr(args, 'run_tag', '') or ''
+    save_path = f"checkpoints/{args.model}_{args.dataset}_{args.method}{suffix}_stage1.pth"
     os.makedirs("checkpoints", exist_ok=True)
     
     best_loss = float('inf')
@@ -70,6 +104,8 @@ def train_stage1(args, device):
     val_loader = get_dataloader(args.dataset, batch_size=128, split='test')
     
     for epoch in range(args.epochs):
+        # linear KL warm-up: full weight only after `warmup` epochs
+        kl_w_ep = kl_w * min(1.0, (epoch + 1) / warmup) if warmup else kl_w
         # --- TRAIN ---
         model.train()
         epoch_loss = 0
@@ -95,16 +131,15 @@ def train_stage1(args, device):
                 if args.method == 'kl':
                     # 1. Global KL (vs Standard Normal)
                     mu_g, log_g = out['mu_g'], out['log_g']
-                    kl_g = -0.5 * torch.sum(1 + log_g - mu_g.pow(2) - log_g.exp()) / x.shape[0]
-                    
+                    kl_g = apply_free_bits(kl_std_normal_perdim(mu_g, log_g), free_bits)
+
                     # 2. Fine KL (vs Learned Prior)
                     mu_f, log_f = out['mu_f'], out['log_f']
                     mu_p_f, log_p_f = out['mu_prior_f'], out['log_prior_f']
-                    kl_f = loss_kl_general(mu_f, log_f, mu_p_f, log_p_f)
-                    
-                    # Total Loss (weight KL small initially? Standard NVAE uses spectral regularization or warm-up. 
-                    # For simplicity, we use fixed small weight 0.00025 like VAE or slightly higher)
-                    loss = recon_loss + kl_w * (kl_g + kl_f)
+                    kl_f = apply_free_bits(
+                        kl_general_perdim(mu_f, log_f, mu_p_f, log_p_f).flatten(), free_bits)
+
+                    loss = recon_loss + kl_w_ep * (kl_g + kl_f)
                 elif args.method == 'mmd':
                     mu_g, log_g = out['mu_g'], out['log_g']
                     std_g = torch.exp(0.5 * log_g)
@@ -115,9 +150,10 @@ def train_stage1(args, device):
                     # Fine KL (vs Learned Prior) - Essential for stability
                     mu_f, log_f = out['mu_f'], out['log_f']
                     mu_p_f, log_p_f = out['mu_prior_f'], out['log_prior_f']
-                    kl_f = loss_kl_general(mu_f, log_f, mu_p_f, log_p_f)
-                    
-                    loss = recon_loss + 10.0 * mmd_loss + kl_w * kl_f
+                    kl_f = apply_free_bits(
+                        kl_general_perdim(mu_f, log_f, mu_p_f, log_p_f).flatten(), free_bits)
+
+                    loss = recon_loss + 10.0 * mmd_loss + kl_w_ep * kl_f
 
             loss.backward()
             optimizer.step()
