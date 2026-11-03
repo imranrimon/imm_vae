@@ -21,3 +21,12 @@ __pycache__/
 
 # Temporary Office lock files
 ~$*
+
+# Regenerable evaluation caches (FID reference statistics, feature banks).
+# Rebuilt automatically by fid_standard.py / vq_fid_50k.py; the two VQ feature
+# banks are 410 MB each, over GitHub's 100 MB per-file limit.
+/final_project/results/**/_*.npz
+/final_project/results/**/_*.npy
+
+# Build output of paper/finalize.py
+/paper_overleaf.zip
